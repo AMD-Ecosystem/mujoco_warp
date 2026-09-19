@@ -1019,8 +1019,6 @@ def linesearch_iterative(ls_iterations: int, cone_type: types.ConeType, fuse_jv:
             colind = efc_J_colind_in[worldid, 0, sparseid]
             jv += efc_J_in[worldid, 0, sparseid] * ctx_search_in[worldid, colind]
         else:
-          # AMD Opt 6: dense J access is stride-nv in memory — L2 bound.
-          # wp.unroll hints compiler to unroll and vectorize for AMD CDNA3 SIMT.
           for i in range(nv):
             jv += efc_J_in[worldid, efcid, i] * ctx_search_in[worldid, i]
         ctx_jv_out[worldid, efcid] = jv
