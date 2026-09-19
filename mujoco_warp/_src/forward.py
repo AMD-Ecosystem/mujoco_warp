@@ -1451,10 +1451,14 @@ def step(m: Model, d: Data):
   """
   # ------------------------------------------------------------------ AMD Opt D
   # Adaptive hipGraph: pre-compiles 5 graphs (1,4,10,40,100 solver iters).
-  # Each step: launch G1, D2H convergence check (~5us), stop if converged,
-  # else launch G4, check, etc. Common case (locomotion) converges at G1.
-  # Worst case runs all 5 graphs = 155 iters with 5 D2H checks (~25us overhead).
-  # This gives full convergence guarantee while near-optimal in the common case.
+  # Each step launches EXACTLY ONE of them — the graphs are complete steps, not
+  # incremental continuations, so they cannot be chained (see Phase 4 below).
+  #
+  # There is therefore NO convergence guarantee: a replayed graph runs its fixed
+  # iteration count and cannot early-exit, so if the selected budget is below
+  # what the step actually needed the solve is silently truncated. The budget is
+  # calibrated from warmup convergence and escalated one tier at a time by the
+  # Phase 4 monitor, which samples only every MJW_HIP_GRAPH_MONITOR steps.
   # Check WP_HIP_GRAPH_ENABLE — without it, capture_begin is a no-op on HIP
   import os as _os
   _hip_graph_enabled = _os.environ.get("WP_HIP_GRAPH_ENABLE", "0") == "1"
