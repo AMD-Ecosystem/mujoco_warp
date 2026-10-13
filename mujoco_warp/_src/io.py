@@ -262,16 +262,24 @@ def put_model(mjm: mujoco.MjModel) -> types.Model:
   # CUDA graph conditional nodes are unavailable on HIP/ROCm and on CUDA toolkits < 12.4.
   # Default to True only when Warp reports the feature is supported on the active device.
   opt.graph_conditional = bool(wp.is_conditional_graph_supported())
-  # AMD Opt C: reduce linesearch iterations for HIP/ROCm devices.
-  # MuJoCo default is ls_iterations=50, chosen for CPU float64 precision.
-  # On AMD GPU with float32 + early-exit solver (1-2 Newton iters typical),
-  # ls_iterations=10 gives equivalent physics quality at ~3-4x less linesearch cost.
-  # User can override by setting m.opt.ls_iterations after put_model().
-  # The cap itself is env-tunable (MJW_LS_ITERS_HIP_CAP) so the linesearch budget
-  # can be swept lower (e.g. 6-8) without editing config, since linesearch cost
-  # scales directly with ls_iterations (dim=(nworld, ls_iterations)).
+  # AMD Opt C: cap the linesearch budget for HIP/ROCm devices.
+  #
+  # This only applies to the parallel linesearch. That path launches a fixed
+  # dim=(nworld, ls_iterations) grid with no early exit, so ls_iterations is the
+  # work actually performed and capping it is a real cost reduction — and a real
+  # coarsening of the step. The default iterative linesearch early-exits on
+  # ls_done, so there ls_iterations is only a ceiling: capping it changes nothing
+  # in the common case and silently truncates the bracketing search in the rare
+  # case that needs the headroom.
+  #
+  # Capping unconditionally also meant put_model() mutated opt.ls_iterations on
+  # every HIP run, so the model did not round-trip and a CUDA-vs-HIP comparison
+  # compared two different configurations without saying so.
+  #
+  # The cap is env-tunable (MJW_LS_ITERS_HIP_CAP) so the budget can be swept
+  # lower; set it to 0 to disable the cap entirely.
   _ls_cap = int(os.environ.get("MJW_LS_ITERS_HIP_CAP", "10"))
-  if wp.get_device().is_hip and opt.ls_iterations > _ls_cap:
+  if _ls_cap > 0 and opt.ls_parallel and wp.get_device().is_hip and opt.ls_iterations > _ls_cap:
     opt.ls_iterations = _ls_cap
 
   opt.run_collision_detection = True
