@@ -33,7 +33,8 @@ def supports_graph_capture() -> bool:
   available. Tests that wrap kernels in `wp.ScopedCapture` should be guarded
   with this helper.
   """
-  return wp.get_device().supports_graph_capture
+  device = wp.get_device()
+  return device.supports_graph_capture and not device.is_hip
 
 
 def supports_cubql() -> bool:

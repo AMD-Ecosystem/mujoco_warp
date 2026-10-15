@@ -1235,6 +1235,8 @@ def make_data(
 
   _allocate_island_arrays(mjm, d, nworld, njmax, ENABLE_ISLANDS, mjd)
 
+  _allocate_amd_state(mjm, d, nworld)
+
   return d
 
 
@@ -1479,23 +1481,28 @@ def put_data(
 
   d.nacon = wp.array([mjd.ncon * nworld], dtype=int)
 
+  _allocate_amd_state(mjm, d, nworld)
+
+  return d
+
+
+def _allocate_amd_state(mjm: mujoco.MjModel, d: types.Data, nworld: int):
+  """Allocates the AMD optimization streams, scratch buffers, and hipGraph state."""
   # AMD Opt 1/2: Pre-create streams for multi-stream parallelism.
   # Creating wp.Stream() inside the step loop costs ~10-50µs per call.
   # Pre-creating and caching here eliminates that per-step overhead.
-  import warp as wp_inner
-
-  device = wp_inner.get_device()
+  device = wp.get_device()
   if device.is_hip:
-    d._stream_collision = wp_inner.Stream(device)  # for collision detection
-    d._stream_secondary = wp_inner.Stream(device)  # for independent kinematics work
-    d._stream_cg = wp_inner.Stream(device)  # for CG prev_grad update
+    d._stream_collision = wp.Stream(device)  # for collision detection
+    d._stream_secondary = wp.Stream(device)  # for independent kinematics work
+    d._stream_cg = wp.Stream(device)  # for CG prev_grad update
     # AMD Opt E: dedicated stream for async observation readback.
     # Allows the RL framework to overlap GPU physics (next step) with CPU/NN
     # processing of observations from the current step. Usage:
     #   with wp.ScopedStream(d._stream_obs):
     #       wp.copy(obs_cpu_pinned, d.qpos)  # async, non-blocking
     #   # while GPU runs next physics step on default stream
-    d._stream_obs = wp_inner.Stream(device)
+    d._stream_obs = wp.Stream(device)
 
   # AMD Opt A: Pre-allocate scratch buffers to eliminate wp.zeros() each step.
   # These replace inline allocations in tendon_bias, rne_postconstraint,
@@ -1535,10 +1542,8 @@ def put_data(
     # graph-capture window. Allocating pinned host memory during hipGraph
     # capture is illegal (hipErrorStreamCaptureUnsupported) and previously
     # crashed the first captured step (see solver._solve). Allocating it eagerly
-    # in put_data guarantees it exists before capture begins.
+    # when Data is created guarantees it exists before capture begins.
     d._nsolving_host = wp.empty(1, dtype=int, device="cpu", pinned=True)
-
-  return d
 
 
 def get_data_into(
@@ -3093,6 +3098,16 @@ def create_render_context(
   Returns:
     The render context containing rendering fields and output arrays on device.
   """
+  if wp.get_device().is_hip:
+    if render_skybox:
+      raise ValueError("render_skybox requires Warp textures, which are not supported on HIP/ROCm.")
+    if use_textures:
+      warnings.warn(
+        "HIP/ROCm device detected: Warp textures are not supported on this backend. "
+        "use_textures will be disabled automatically."
+      )
+      use_textures = False
+
   mjd = mujoco.MjData(mjm)
   mujoco.mj_forward(mjm, mjd)
 
