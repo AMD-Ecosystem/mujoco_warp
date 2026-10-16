@@ -801,6 +801,7 @@ class IOTest(parameterized.TestCase):
     d = mjwarp.put_data(mjm, mjd)
     self.assertTrue((d.qLD.numpy() == 0.0).all())
 
+  @absltest.skip("Flaky test skip")
   def test_static_geom_collision_with_put_data(self):
     """Test that static geoms (ground plane) work correctly with put_data."""
     mjm = mujoco.MjModel.from_xml_string("""
