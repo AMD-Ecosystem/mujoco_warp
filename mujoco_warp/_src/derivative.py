@@ -17,6 +17,7 @@ import warp as wp
 
 from mujoco_warp._src import math
 from mujoco_warp._src import util_misc
+from mujoco_warp._src import warp_util
 from mujoco_warp._src.support import next_act
 from mujoco_warp._src.types import MJ_MINVAL
 from mujoco_warp._src.types import BiasType
@@ -596,7 +597,7 @@ def deriv_rne_vel(m: Model, d: Data, out: wp.array3d[float], flg_subtract: bool 
 
   # Forward pass 1: compute Dcvel and Dcdof_dot
   for body_tree in m.body_tree:
-    wp.launch(
+    warp_util.launch(
       deriv_rne_cvel_cdof_dot,
       dim=(d.nworld, body_tree.size, m.nv),
       inputs=[
@@ -613,7 +614,7 @@ def deriv_rne_vel(m: Model, d: Data, out: wp.array3d[float], flg_subtract: bool 
 
   # Forward pass 2: compute Dcacc and Dcfrcbody
   for body_tree in m.body_tree:
-    wp.launch(
+    warp_util.launch(
       deriv_rne_cacc_cfrcbody_forward,
       dim=(d.nworld, body_tree.size, m.nv),
       inputs=[
@@ -633,7 +634,7 @@ def deriv_rne_vel(m: Model, d: Data, out: wp.array3d[float], flg_subtract: bool 
 
   # Backward pass: accumulate Dcfrcbody from children to parents
   for body_tree in reversed(m.body_tree):
-    wp.launch(
+    warp_util.launch(
       deriv_rne_cfrcbody_backward,
       dim=(d.nworld, body_tree.size, m.nv),
       inputs=[m.body_parentid, body_tree],
@@ -641,7 +642,7 @@ def deriv_rne_vel(m: Model, d: Data, out: wp.array3d[float], flg_subtract: bool 
     )
 
   # Project body-space derivatives into joint-space qDeriv (always sparse D-structure)
-  wp.launch(
+  warp_util.launch(
     deriv_rne_body2jnt_sparse,
     dim=(d.nworld, m.qD_fullm_i.size),
     inputs=[m.dof_bodyid, d.cdof, m.opt.timestep, m.qD_fullm_i, m.qD_fullm_j, Dcfrcbody, flg_subtract],
@@ -666,7 +667,7 @@ def deriv_smooth_vel(m: Model, d: Data, out: wp.array2d[float]):
     out.zero_()
     if m.nu > 0 and not (m.opt.disableflags & DisableBit.ACTUATION):
       vel = wp.empty((d.nworld, m.nu), dtype=float)
-      wp.launch(
+      warp_util.launch(
         _qderiv_actuator_passive_vel,
         dim=(d.nworld, m.nu),
         inputs=[
@@ -692,7 +693,7 @@ def deriv_smooth_vel(m: Model, d: Data, out: wp.array2d[float]):
         outputs=[vel],
       )
       if m.is_sparse:
-        wp.launch(
+        warp_util.launch(
           _qderiv_actuator_passive_actuation_sparse,
           dim=(d.nworld, m.nu),
           inputs=[
@@ -706,13 +707,13 @@ def deriv_smooth_vel(m: Model, d: Data, out: wp.array2d[float]):
           outputs=[out],
         )
       else:
-        wp.launch(
+        warp_util.launch(
           _qderiv_actuator_passive_actuation_dense,
           dim=(d.nworld, Mi.size),
           inputs=[m.nu, d.moment_rownnz, d.moment_rowadr, d.moment_colind, d.actuator_moment, vel, Mi, Mj],
           outputs=[out],
         )
-    wp.launch(
+    warp_util.launch(
       _qderiv_actuator_passive,
       dim=(d.nworld, Mi.size),
       inputs=[
@@ -735,7 +736,7 @@ def deriv_smooth_vel(m: Model, d: Data, out: wp.array2d[float]):
     wp.copy(out, d.M)
 
   if not (m.opt.disableflags & DisableBit.DAMPER):
-    wp.launch(
+    warp_util.launch(
       _qderiv_tendon_damping,
       dim=(d.nworld, Mi.size),
       inputs=[

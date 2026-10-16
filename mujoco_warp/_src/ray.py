@@ -16,6 +16,7 @@
 from typing import Tuple
 
 import warp as wp
+from mujoco_warp._src import warp_util
 
 from mujoco_warp._src.math import safe_div
 from mujoco_warp._src.types import MJ_MAXVAL
@@ -1255,7 +1256,7 @@ def rays(
   """
   # TODO: Investigate building rc if none and removing the non-accelerated path
   if rc is None:
-    wp.launch_tiled(
+    warp_util.launch_tiled(
       _ray,
       dim=(d.nworld, pnt.shape[1]),
       inputs=[
@@ -1293,7 +1294,7 @@ def rays(
       block_dim=m.block_dim.ray,
     )
   else:
-    wp.launch(
+    warp_util.launch(
       _ray_bvh,
       dim=(d.nworld, pnt.shape[1]),
       inputs=[

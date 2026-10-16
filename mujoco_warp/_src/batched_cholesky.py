@@ -51,6 +51,11 @@ USE_BATCHED_CHOLESKY = os.environ.get("MJW_BATCHED_CHOLESKY", "1") != "0"
 # exceed the wavefront width (64). Larger matrices keep the existing blocked path.
 BATCHED_CHOLESKY_MAX_DIM = 64
 
+# Largest matrix routed through the one-thread-per-world register kernel. Its packed
+# factor needs nv*(nv+1)/2 registers per thread; beyond ~29 it spills to scratch on
+# gfx942 and falls behind the lane-cooperative kernel (break-even at nv=32).
+SERIAL_CHOLESKY_MAX_DIM = int(os.environ.get("MJW_SERIAL_CHOLESKY_MAX_DIM", "29"))
+
 
 @cache_kernel
 def batched_cholesky_factorize_solve(nv: int, nv_pad: int):
@@ -140,6 +145,86 @@ def batched_cholesky_factorize_solve(nv: int, nv_pad: int):
       wp.tile_scatter_masked(y, lane, upd, has)
 
     wp.tile_store(ctx_Mgrad_out[worldid], y)
+
+  return kernel
+
+
+@cache_kernel
+def serial_cholesky_factorize_solve(nv: int):
+  """Factory: one-thread-per-world dense Cholesky factorize+solve held in registers.
+
+  Same inputs/outputs and upper-triangle contract as batched_cholesky_factorize_solve,
+  but launched with wp.launch(dim=nworld, block_dim=64). Fully unrolled for a fixed nv,
+  so the packed factor stays in registers and there are no shared-memory round trips
+  or barriers; the launch bound lets the compiler use the full register file.
+  """
+  tri = nv * (nv + 1) // 2
+  snippet = f"""
+  constexpr int N = {nv};
+  if (done[w]) return;
+  float L[{tri}];
+  float y[N];
+  float inv[N];
+  #pragma unroll
+  for (int i = 0; i < N; i++) {{
+    #pragma unroll
+    for (int j = 0; j <= i; j++) L[i * (i + 1) / 2 + j] = *wp::address(h, w, j, i);
+    y[i] = *wp::address(grad, w, i);
+  }}
+  #pragma unroll
+  for (int i = 0; i < N; i++) {{
+    #pragma unroll
+    for (int j = 0; j <= i; j++) {{
+      float s = L[i * (i + 1) / 2 + j];
+      #pragma unroll
+      for (int k = 0; k < j; k++) s -= L[i * (i + 1) / 2 + k] * L[j * (j + 1) / 2 + k];
+      if (i == j) {{
+        const float d = sqrtf(s);
+        L[i * (i + 1) / 2 + i] = d;
+        inv[i] = 1.0f / d;
+      }} else {{
+        L[i * (i + 1) / 2 + j] = s * inv[j];
+      }}
+    }}
+  }}
+  #pragma unroll
+  for (int i = 0; i < N; i++) {{
+    float s = y[i];
+    #pragma unroll
+    for (int k = 0; k < i; k++) s -= L[i * (i + 1) / 2 + k] * y[k];
+    y[i] = s * inv[i];
+  }}
+  #pragma unroll
+  for (int ii = 0; ii < N; ii++) {{
+    const int i = N - 1 - ii;
+    float s = y[i];
+    #pragma unroll
+    for (int k = i + 1; k < N; k++) s -= L[k * (k + 1) / 2 + i] * y[k];
+    y[i] = s * inv[i];
+  }}
+  #pragma unroll
+  for (int i = 0; i < N; i++) *wp::address(Mgrad, w, i) = y[i];
+  """
+
+  def factorize_solve(
+    grad: wp.array2d(dtype=float), h: wp.array3d(dtype=float), done: wp.array(dtype=bool), Mgrad: wp.array2d(dtype=float), w: int
+  ): ...
+
+  # native functions are keyed by qualified name; make it unique per nv
+  factorize_solve.__qualname__ = f"serial_cholesky_factorize_solve_{nv}"
+  factorize_solve = wp.func_native(snippet)(factorize_solve)
+
+  @wp.kernel(module="unique", enable_backward=False, launch_bounds=64)
+  def kernel(
+    # In:
+    ctx_grad_in: wp.array2d(dtype=float),
+    h_in: wp.array3d(dtype=float),
+    ctx_done_in: wp.array(dtype=bool),
+    # Out:
+    ctx_Mgrad_out: wp.array2d(dtype=float),
+  ):
+    worldid = wp.tid()
+    factorize_solve(ctx_grad_in, h_in, ctx_done_in, ctx_Mgrad_out, worldid)
 
   return kernel
 

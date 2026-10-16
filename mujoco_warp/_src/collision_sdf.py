@@ -16,6 +16,7 @@
 from typing import Tuple
 
 import warp as wp
+from mujoco_warp._src import warp_util
 
 from mujoco_warp._src.collision_core import CollisionContext
 from mujoco_warp._src.collision_core import contact_params
@@ -1005,7 +1006,7 @@ def _sdf_narrowphase(
 
 @event_scope
 def sdf_narrowphase(m: Model, d: Data, ctx: CollisionContext):
-  wp.launch(
+  warp_util.launch(
     _sdf_narrowphase,
     dim=(m.opt.sdf_initpoints, d.naconmax),
     inputs=[

@@ -22,6 +22,7 @@ from mujoco_warp._src import math
 from mujoco_warp._src import ray
 from mujoco_warp._src import smooth
 from mujoco_warp._src import support
+from mujoco_warp._src import warp_util
 from mujoco_warp._src.collision_sdf import get_sdf_params
 from mujoco_warp._src.collision_sdf import sdf
 from mujoco_warp._src.types import MJ_MAXCONPAIR
@@ -787,7 +788,7 @@ def sensor_pos(m: Model, d: Data):
     rangefinder_normal = wp.empty((d.nworld, m.nrangefinder), dtype=wp.vec3)
 
     # get position and direction
-    wp.launch(
+    warp_util.launch(
       _sensor_rangefinder_init,
       dim=(d.nworld, m.sensor_rangefinder_adr.size),
       inputs=[m.sensor_objid, m.sensor_rangefinder_adr, d.site_xpos, d.site_xmat],
@@ -817,7 +818,7 @@ def sensor_pos(m: Model, d: Data):
   # collision sensors (distance, normal, fromto)
   sensor_collision = wp.full((d.nworld, m.nsensorcollision, 8, 7), 1.0e32, dtype=float)
   if m.nsensorcollision:
-    wp.launch(
+    warp_util.launch(
       _sensor_collision,
       dim=d.naconmax,
       inputs=[
@@ -835,7 +836,7 @@ def sensor_pos(m: Model, d: Data):
       outputs=[sensor_collision],
     )
 
-  wp.launch(
+  warp_util.launch(
     _sensor_pos,
     dim=(d.nworld, m.sensor_pos_adr.size),
     inputs=[
@@ -895,7 +896,7 @@ def sensor_pos(m: Model, d: Data):
   )
 
   # jointlimitpos and tendonlimitpos
-  wp.launch(
+  warp_util.launch(
     _limit_pos,
     dim=(d.nworld, d.njmax, m.sensor_limitpos_adr.size),
     inputs=[
@@ -1403,7 +1404,7 @@ def sensor_vel(m: Model, d: Data):
   if m.sensor_subtree_vel:
     smooth.subtree_vel(m, d)
 
-  wp.launch(
+  warp_util.launch(
     _sensor_vel,
     dim=(d.nworld, m.sensor_vel_adr.size),
     inputs=[
@@ -1442,7 +1443,7 @@ def sensor_vel(m: Model, d: Data):
     outputs=[d.sensordata],
   )
 
-  wp.launch(
+  warp_util.launch(
     _limit_vel,
     dim=(d.nworld, d.njmax, m.sensor_limitvel_adr.size),
     inputs=[
@@ -2474,7 +2475,7 @@ def sensor_acc(m: Model, d: Data):
   if m.opt.disableflags & DisableBit.SENSOR:
     return
 
-  wp.launch(
+  warp_util.launch(
     _sensor_touch,
     dim=(d.naconmax, m.sensor_touch_adr.size),
     inputs=[
@@ -2504,7 +2505,7 @@ def sensor_acc(m: Model, d: Data):
 
   weld_geom_count = wp.zeros((d.nworld, m.nbody), dtype=int)
   weld_geom_list = wp.full((d.nworld, m.nbody, MJ_MAXCONPAIR), -1, dtype=int)
-  wp.launch(
+  warp_util.launch(
     _preprocess_tactile_contacts,
     dim=d.naconmax,
     inputs=[
@@ -2520,7 +2521,7 @@ def sensor_acc(m: Model, d: Data):
     ],
   )
 
-  wp.launch(
+  warp_util.launch(
     _sensor_tactile,
     dim=(d.nworld, m.nsensortaxel),
     inputs=[
@@ -2572,7 +2573,7 @@ def sensor_acc(m: Model, d: Data):
     sensor_contact_matchid.fill_(-1)
     sensor_contact_criteria.fill_(1.0e32)
 
-    wp.launch(
+    warp_util.launch(
       _contact_match,
       dim=(m.sensor_contact_adr.size, d.naconmax),
       inputs=[
@@ -2607,7 +2608,7 @@ def sensor_acc(m: Model, d: Data):
     )
 
     # sorting
-    wp.launch_tiled(
+    warp_util.launch_tiled(
       _contact_sort(m.opt.contact_sensor_maxmatch),
       dim=(d.nworld, m.sensor_contact_adr.size),
       inputs=[m.sensor_intprm, m.sensor_contact_adr, sensor_contact_nmatch, sensor_contact_matchid, sensor_contact_criteria],
@@ -2618,7 +2619,7 @@ def sensor_acc(m: Model, d: Data):
   if m.sensor_rne_postconstraint:
     smooth.rne_postconstraint(m, d)
 
-  wp.launch(
+  warp_util.launch(
     _sensor_acc,
     dim=(d.nworld, m.sensor_acc_adr.size),
     inputs=[
@@ -2666,7 +2667,7 @@ def sensor_acc(m: Model, d: Data):
     outputs=[d.sensordata],
   )
 
-  wp.launch(
+  warp_util.launch(
     _tendon_actuator_force,
     dim=(d.nworld, m.sensor_tendonactfrc_adr.size, m.nu),
     inputs=[
@@ -2682,7 +2683,7 @@ def sensor_acc(m: Model, d: Data):
     ],
   )
 
-  wp.launch(
+  warp_util.launch(
     _tendon_actuator_force_cutoff,
     dim=(d.nworld, m.sensor_tendonactfrc_adr.size),
     inputs=[
@@ -2696,7 +2697,7 @@ def sensor_acc(m: Model, d: Data):
     outputs=[d.sensordata],
   )
 
-  wp.launch(
+  warp_util.launch(
     _limit_frc,
     dim=(d.nworld, d.njmax, m.sensor_limitfrc_adr.size),
     inputs=[
@@ -2890,17 +2891,17 @@ def _energy_pos_passive_tendon(
 
 def energy_pos(m: Model, d: Data):
   """Position-dependent energy (potential)."""
-  wp.launch(_energy_pos_zero, dim=d.nworld, outputs=[d.energy])
+  warp_util.launch(_energy_pos_zero, dim=d.nworld, outputs=[d.energy])
 
   # init potential energy: -sum_i(body_i.mass * dot(gravity, body_i.pos))
   if not (m.opt.disableflags & DisableBit.GRAVITY):
-    wp.launch(
+    warp_util.launch(
       _energy_pos_gravity, dim=(d.nworld, m.nbody - 1), inputs=[m.opt.gravity, m.body_mass, d.xipos], outputs=[d.energy]
     )
 
   if not (m.opt.disableflags & DisableBit.SPRING):
     # add joint-level springs
-    wp.launch(
+    warp_util.launch(
       _energy_pos_passive_joint,
       dim=(d.nworld, m.njnt),
       inputs=[
@@ -2916,7 +2917,7 @@ def energy_pos(m: Model, d: Data):
 
     # add tendon-level springs
     if m.ntendon:
-      wp.launch(
+      warp_util.launch(
         _energy_pos_passive_tendon,
         dim=(d.nworld, m.ntendon),
         inputs=[
@@ -2966,7 +2967,7 @@ def energy_vel(m: Model, d: Data):
   mv = wp.zeros((d.nworld, m.nv), dtype=float)
   support.mul_m(m, d, mv, d.qvel)
 
-  wp.launch_tiled(
+  warp_util.launch_tiled(
     _energy_vel_kinetic(m.nv),
     dim=d.nworld,
     inputs=[d.qvel, mv],

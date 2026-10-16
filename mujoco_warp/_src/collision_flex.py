@@ -16,6 +16,7 @@
 import warp as wp
 
 from mujoco_warp._src import collision_primitive_core
+from mujoco_warp._src import warp_util
 from mujoco_warp._src.math import make_frame
 from mujoco_warp._src.types import MJ_MAXVAL
 from mujoco_warp._src.types import MJ_MINMU
@@ -813,7 +814,7 @@ def flex_narrowphase(m: Model, d: Data):
   if m.nflex == 0:
     return
 
-  wp.launch(
+  warp_util.launch(
     _flex_narrowphase_dim2,
     dim=(d.nworld, m.nflexelem),
     inputs=[
@@ -874,7 +875,7 @@ def flex_narrowphase(m: Model, d: Data):
     ],
   )
 
-  wp.launch(
+  warp_util.launch(
     _flex_narrowphase_dim3,
     dim=(d.nworld, m.nflexshelldata // 3),
     inputs=[
@@ -934,7 +935,7 @@ def flex_narrowphase(m: Model, d: Data):
     ],
   )
 
-  wp.launch(
+  warp_util.launch(
     _flex_plane_narrowphase,
     dim=(d.nworld, m.nflexvert),
     inputs=[

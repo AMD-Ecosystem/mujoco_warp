@@ -16,6 +16,7 @@
 from typing import Optional, Tuple
 
 import warp as wp
+from mujoco_warp._src import warp_util
 
 from mujoco_warp._src.math import motion_cross
 from mujoco_warp._src.types import MJ_MINVAL
@@ -155,7 +156,7 @@ def mul_m(
     M = d.M
 
   if m.is_sparse:
-    wp.launch(
+    warp_util.launch(
       mul_m_sparse(check_skip),
       dim=(d.nworld, m.nv),
       inputs=[m.M_mulm_rowadr, m.M_mulm_col, m.M_mulm_madr, M, vec, skip],
@@ -163,7 +164,7 @@ def mul_m(
     )
 
   else:
-    wp.launch(
+    warp_util.launch(
       mul_m_dense(m.nv, check_skip),
       dim=(d.nworld, m.nv),
       inputs=[M, vec, skip],
@@ -299,7 +300,7 @@ def mul_m_island(
     M = d.M
 
   if m.is_sparse:
-    wp.launch(
+    warp_util.launch(
       _mul_m_island_sparse,
       dim=(d.nworld, m.nv),
       inputs=[
@@ -318,7 +319,7 @@ def mul_m_island(
       outputs=[res],
     )
   else:
-    wp.launch(
+    warp_util.launch(
       _mul_m_island_dense,
       dim=(d.nworld, m.nv),
       inputs=[
@@ -478,7 +479,7 @@ def solve_m_island(
     else:
       dim_block = 1
 
-    wp.launch(
+    warp_util.launch(
       _solve_LD_sparse_island(m.nv, nlevels),
       dim=(d.nworld, dim_block),
       inputs=[
@@ -496,7 +497,7 @@ def solve_m_island(
     )
   else:
     for tile in m.M_tiles:
-      wp.launch_tiled(
+      warp_util.launch_tiled(
         _tile_cholesky_solve_island(tile),
         dim=(d.nworld, tile.adr.size),
         inputs=[d.nidof, d.map_dof2idof, d.qLD, vec, tile.adr],
@@ -551,7 +552,7 @@ def _apply_ft(
 
 
 def apply_ft(m: Model, d: Data, ft: wp.array2d[wp.spatial_vector], qfrc: wp.array2d[float], flg_add: bool):
-  wp.launch(
+  warp_util.launch(
     kernel=_apply_ft,
     dim=(d.nworld, m.nv),
     inputs=[m.nbody, m.body_parentid, m.body_rootid, m.dof_bodyid, d.xipos, d.subtree_com, d.cdof, ft, flg_add],
@@ -695,7 +696,7 @@ def contact_force(m: Model, d: Data, contact_ids: wp.array[int], to_world_frame:
     to_world_frame: If True, map force from contact to world frame.
     force: Contact forces.
   """
-  wp.launch(
+  warp_util.launch(
     contact_force_kernel,
     dim=contact_ids.size,
     inputs=[
@@ -845,7 +846,7 @@ def jac(
   jacp_arr = jacp or wp.empty((0, 0, 0), dtype=float)
   jacr_arr = jacr or wp.empty((0, 0, 0), dtype=float)
 
-  wp.launch(
+  warp_util.launch(
     kernel,
     dim=(d.nworld, m.nv),
     inputs=[m.body_parentid, m.body_rootid, m.dof_bodyid, m.body_isdofancestor, d.subtree_com, d.cdof, point, body],
@@ -1029,7 +1030,7 @@ def get_state(m: Model, d: Data, state: wp.array2d[float], sig: int, active: Opt
             state_out[worldid, adr + 3] = quat[3]
             adr += 4
 
-  wp.launch(
+  warp_util.launch(
     _get_state,
     dim=d.nworld,
     inputs=[
@@ -1181,7 +1182,7 @@ def set_state(m: Model, d: Data, state: wp.array2d[float], sig: int, active: Opt
             mocap_quat_out[worldid, j] = quat
             adr += 4
 
-  wp.launch(
+  warp_util.launch(
     _set_state,
     dim=d.nworld,
     inputs=[

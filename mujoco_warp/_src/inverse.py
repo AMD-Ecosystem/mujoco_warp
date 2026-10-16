@@ -22,6 +22,7 @@ from mujoco_warp._src import smooth
 from mujoco_warp._src import solver
 from mujoco_warp._src import support
 from mujoco_warp._src import util_misc
+from mujoco_warp._src import warp_util
 from mujoco_warp._src.support import mul_m
 from mujoco_warp._src.types import Data
 from mujoco_warp._src.types import DisableBit
@@ -101,7 +102,7 @@ def discrete_acc(m: Model, d: Data, qacc: wp.array2d[float]):
     support.mul_m(m, d, qfrc, d.qacc)
 
     # qfrc += m.opt.timestep * damp_deriv * d.qacc
-    wp.launch(
+    warp_util.launch(
       _qfrc_eulerdamp,
       dim=(d.nworld, m.nv),
       inputs=[m.opt.timestep, m.dof_damping, m.dof_dampingpoly, d.qvel, d.qacc],
@@ -153,7 +154,7 @@ def inverse(m: Model, d: Data):
 
   support.mul_m(m, d, d.qfrc_inverse, d.qacc)
 
-  wp.launch(
+  warp_util.launch(
     _qfrc_inverse,
     dim=(d.nworld, m.nv),
     inputs=[

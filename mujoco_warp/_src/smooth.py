@@ -19,6 +19,7 @@ import warp as wp
 from mujoco_warp._src import math
 from mujoco_warp._src import support
 from mujoco_warp._src import util_misc
+from mujoco_warp._src import warp_util
 from mujoco_warp._src.batched_cholesky import BATCHED_CHOLESKY_MAX_DIM as _BATCHED_CHOLESKY_MAX_DIM
 from mujoco_warp._src.batched_cholesky import USE_BATCHED_CHOLESKY as _USE_BATCHED_CHOLESKY
 from mujoco_warp._src.batched_cholesky import batched_factor_solve_i
@@ -365,7 +366,7 @@ def kinematics(m: Model, d: Data):
   derived positions and orientations of geoms, sites, and flexible elements, based on the
   current joint positions and any attached mocap bodies.
   """
-  wp.launch(
+  warp_util.launch(
     _kinematics_branch,
     dim=(d.nworld, m.nbranch),
     inputs=[
@@ -389,28 +390,28 @@ def kinematics(m: Model, d: Data):
     outputs=[d.xpos, d.xquat, d.xanchor, d.xaxis],
   )
 
-  wp.launch(
+  warp_util.launch(
     _compute_body_matrices,
     dim=(d.nworld, m.nbody),
     inputs=[d.xquat],
     outputs=[d.xmat],
   )
 
-  wp.launch(
+  warp_util.launch(
     _compute_body_inertial_frames,
     dim=(d.nworld, m.nbody),
     inputs=[m.body_ipos, m.body_iquat, d.xpos, d.xquat],
     outputs=[d.xipos, d.ximat],
   )
 
-  wp.launch(
+  warp_util.launch(
     _geom_local_to_global,
     dim=(d.nworld, m.ngeom),
     inputs=[m.body_rootid, m.body_weldid, m.body_mocapid, m.geom_bodyid, m.geom_pos, m.geom_quat, d.xpos, d.xquat],
     outputs=[d.geom_xpos, d.geom_xmat],
   )
 
-  wp.launch(
+  warp_util.launch(
     _site_local_to_global,
     dim=(d.nworld, m.nsite),
     inputs=[m.site_bodyid, m.site_pos, m.site_quat, d.xpos, d.xquat],
@@ -420,7 +421,7 @@ def kinematics(m: Model, d: Data):
 
 @event_scope
 def flex(m: Model, d: Data):
-  wp.launch(
+  warp_util.launch(
     _flex_vertices,
     dim=(d.nworld, m.nflexvert),
     inputs=[
@@ -435,7 +436,7 @@ def flex(m: Model, d: Data):
     ],
     outputs=[d.flexvert_xpos],
   )
-  wp.launch(
+  warp_util.launch(
     _flex_edges,
     dim=(d.nworld, m.nflexedge),
     inputs=[
@@ -609,25 +610,25 @@ def com_pos(m: Model, d: Data):
   mass-weighted positions up the kinematic tree, divides by total mass, and computes composite
   inertias and motion degrees of freedom in the subtree CoM frame.
   """
-  wp.launch(_subtree_com_init, dim=(d.nworld, m.nbody), inputs=[m.body_mass, d.xipos], outputs=[d.subtree_com])
+  warp_util.launch(_subtree_com_init, dim=(d.nworld, m.nbody), inputs=[m.body_mass, d.xipos], outputs=[d.subtree_com])
 
   for i in reversed(range(len(m.body_tree))):
     body_tree = m.body_tree[i]
-    wp.launch(
+    warp_util.launch(
       _subtree_com_acc,
       dim=(d.nworld, body_tree.size),
       inputs=[m.body_parentid, d.subtree_com, body_tree],
       outputs=[d.subtree_com],
     )
 
-  wp.launch(_subtree_div, dim=(d.nworld, m.nbody), inputs=[m.body_subtreemass, d.subtree_com], outputs=[d.subtree_com])
-  wp.launch(
+  warp_util.launch(_subtree_div, dim=(d.nworld, m.nbody), inputs=[m.body_subtreemass, d.subtree_com], outputs=[d.subtree_com])
+  warp_util.launch(
     _cinert,
     dim=(d.nworld, m.nbody),
     inputs=[m.body_rootid, m.body_mass, m.body_inertia, d.xipos, d.ximat, d.subtree_com],
     outputs=[d.cinert],
   )
-  wp.launch(
+  warp_util.launch(
     _cdof,
     dim=(d.nworld, m.njnt),
     inputs=[m.body_rootid, m.jnt_type, m.jnt_dofadr, m.jnt_bodyid, d.xmat, d.xanchor, d.xaxis, d.subtree_com],
@@ -768,7 +769,7 @@ def camlight(m: Model, d: Data):
   Updates the global positions and orientations for all cameras and lights in the model,
   including special handling for tracking and target modes.
   """
-  wp.launch(
+  warp_util.launch(
     _cam_local_to_global,
     dim=(d.nworld, m.ncam),
     inputs=[
@@ -786,7 +787,7 @@ def camlight(m: Model, d: Data):
     ],
     outputs=[d.cam_xpos, d.cam_xmat],
   )
-  wp.launch(
+  warp_util.launch(
     _light_local_to_global,
     dim=(d.nworld, m.nlight),
     inputs=[
@@ -900,18 +901,18 @@ def crb(m: Model, d: Data):
 
   for i in reversed(range(len(m.body_tree))):
     body_tree = m.body_tree[i]
-    wp.launch(_crb_accumulate, dim=(d.nworld, body_tree.size), inputs=[m.body_parentid, d.crb, body_tree], outputs=[d.crb])
+    warp_util.launch(_crb_accumulate, dim=(d.nworld, body_tree.size), inputs=[m.body_parentid, d.crb, body_tree], outputs=[d.crb])
 
   d.M.zero_()
   if m.is_sparse:
-    wp.launch(
+    warp_util.launch(
       _M_sparse,
       dim=(d.nworld, m.nv),
       inputs=[m.dof_bodyid, m.dof_parentid, m.dof_armature, m.M_rownnz, m.M_rowadr, d.cdof, d.crb],
       outputs=[d.M],
     )
   else:
-    wp.launch(
+    warp_util.launch(
       _M_dense, dim=(d.nworld, m.nv), inputs=[m.dof_bodyid, m.dof_parentid, m.dof_armature, d.cdof, d.crb], outputs=[d.M]
     )
 
@@ -988,7 +989,7 @@ def _tendon_armature(
 @event_scope
 def tendon_armature(m: Model, d: Data):
   """Add tendon armature to M."""
-  wp.launch(
+  warp_util.launch(
     _tendon_armature,
     dim=(d.nworld, m.ntendon, m.max_ten_J_rownnz),
     inputs=[
@@ -1120,7 +1121,7 @@ def _factor_i_sparse(m: Model, d: Data, M: wp.array3d[float], L: wp.array3d[floa
   # per factorization. Falls back to the per-level path on CPU or when there
   # are no updates (purely diagonal M).
   if nlevels > 0 and wp.get_device().is_cuda:
-    wp.launch(
+    warp_util.launch(
       _qLD_acc_fused(m.nv, nlevels),
       dim=(d.nworld, m.block_dim.solve_LD_sparse_fused),
       inputs=[m.M_rownnz, m.M_rowadr, m.qLD_all_updates, m.qLD_level_offsets, L],
@@ -1131,9 +1132,9 @@ def _factor_i_sparse(m: Model, d: Data, M: wp.array3d[float], L: wp.array3d[floa
 
   for i in reversed(range(nlevels)):
     qLD_updates = m.qLD_updates[i]
-    wp.launch(_qLD_acc, dim=(d.nworld, qLD_updates.size), inputs=[m.M_rownnz, m.M_rowadr, qLD_updates, L], outputs=[L])
+    warp_util.launch(_qLD_acc, dim=(d.nworld, qLD_updates.size), inputs=[m.M_rownnz, m.M_rowadr, qLD_updates, L], outputs=[L])
 
-  wp.launch(_qLDiag_div, dim=(d.nworld, m.nv), inputs=[m.M_rownnz, m.M_rowadr, L], outputs=[D])
+  warp_util.launch(_qLDiag_div, dim=(d.nworld, m.nv), inputs=[m.M_rownnz, m.M_rowadr, L], outputs=[D])
 
 
 @cache_kernel
@@ -1163,7 +1164,7 @@ def _tile_cholesky_factorize(tile: TileSet):
 def _factor_i_dense(m: Model, d: Data, M: wp.array, L: wp.array):
   """Dense Cholesky factorization of inertia-like matrix M, assumed spd."""
   for tile in m.M_tiles:
-    wp.launch_tiled(
+    warp_util.launch_tiled(
       _tile_cholesky_factorize(tile),
       dim=(d.nworld, tile.adr.size),
       inputs=[M, tile.adr],
@@ -1196,7 +1197,7 @@ def _rne_cacc_world(m: Model, d: Data):
   if m.opt.disableflags & DisableBit.GRAVITY:
     d.cacc.zero_()
   else:
-    wp.launch(_cacc_world, dim=[d.nworld], inputs=[m.opt.gravity], outputs=[d.cacc])
+    warp_util.launch(_cacc_world, dim=[d.nworld], inputs=[m.opt.gravity], outputs=[d.cacc])
 
 
 @wp.kernel
@@ -1237,7 +1238,7 @@ def _cacc_branch(
 
 
 def _rne_cacc_forward(m: Model, d: Data, flg_acc: bool = False):
-  wp.launch(
+  warp_util.launch(
     _cacc_branch,
     dim=(d.nworld, m.nbranch),
     inputs=[
@@ -1284,7 +1285,7 @@ def _cfrc(
 
 
 def _rne_cfrc(m: Model, d: Data, flg_cfrc_ext: bool = False):
-  wp.launch(_cfrc, dim=[d.nworld, m.nbody], inputs=[d.cinert, d.cvel, d.cacc, d.cfrc_ext, flg_cfrc_ext], outputs=[d.cfrc_int])
+  warp_util.launch(_cfrc, dim=[d.nworld, m.nbody], inputs=[d.cinert, d.cvel, d.cacc, d.cfrc_ext, flg_cfrc_ext], outputs=[d.cfrc_int])
 
 
 @wp.kernel
@@ -1307,7 +1308,7 @@ def _cfrc_backward(
 
 def _rne_cfrc_backward(m: Model, d: Data):
   for body_tree in reversed(m.body_tree):
-    wp.launch(
+    warp_util.launch(
       _cfrc_backward, dim=[d.nworld, body_tree.size], inputs=[m.body_parentid, d.cfrc_int, body_tree], outputs=[d.cfrc_int]
     )
 
@@ -1343,7 +1344,7 @@ def rne(m: Model, d: Data, flg_acc: bool = False):
   _rne_cacc_forward(m, d, flg_acc=flg_acc)
   _rne_cfrc(m, d)
   _rne_cfrc_backward(m, d)
-  wp.launch(_qfrc_bias, dim=[d.nworld, m.nv], inputs=[m.dof_bodyid, d.cdof, d.cfrc_int], outputs=[d.qfrc_bias])
+  warp_util.launch(_qfrc_bias, dim=[d.nworld, m.nv], inputs=[m.dof_bodyid, d.cdof, d.cfrc_int], outputs=[d.qfrc_bias])
 
 
 @wp.kernel
@@ -1577,7 +1578,7 @@ def rne_postconstraint(m: Model, d: Data):
   constraints, and contacts.
   """
   # cfrc_ext = perturb
-  wp.launch(
+  warp_util.launch(
     _cfrc_ext,
     dim=(d.nworld, m.nbody),
     inputs=[m.body_rootid, d.xfrc_applied, d.xipos, d.subtree_com],
@@ -1597,14 +1598,14 @@ def rne_postconstraint(m: Model, d: Data):
       ne_connect = wp.zeros((d.nworld,), dtype=int)
       ne_weld = wp.zeros((d.nworld,), dtype=int)
 
-    wp.launch(
+    warp_util.launch(
       _count_equality_constraints,
       dim=(d.nworld, d.njmax),  # TODO(team): launch over max equality constraints
       inputs=[m.eq_type, d.ne, d.efc.type, d.efc.id],
       outputs=[ne_connect, ne_weld],
     )
 
-    wp.launch(
+    warp_util.launch(
       _cfrc_ext_equality,
       dim=(d.nworld, m.neq),
       inputs=[
@@ -1627,7 +1628,7 @@ def rne_postconstraint(m: Model, d: Data):
     )
 
   # cfrc_ext += contacts
-  wp.launch(
+  warp_util.launch(
     _cfrc_ext_contact,
     dim=(d.naconmax,),
     inputs=[
@@ -1969,7 +1970,7 @@ def tendon_bias(m: Model, d: Data, qfrc: wp.array2d[float]):
     ten_Jdot.zero_()
   else:
     ten_Jdot = wp.zeros((d.nworld, m.nJten), dtype=float)
-  wp.launch(
+  warp_util.launch(
     _tendon_dot,
     dim=(d.nworld, m.ntendon),
     inputs=[
@@ -2006,14 +2007,14 @@ def tendon_bias(m: Model, d: Data, qfrc: wp.array2d[float]):
     ten_bias_coef.zero_()
   else:
     ten_bias_coef = wp.zeros((d.nworld, m.ntendon), dtype=float)
-  wp.launch(
+  warp_util.launch(
     _tendon_bias_coef,
     dim=(d.nworld, m.ntendon, m.max_ten_J_rownnz),
     inputs=[m.ten_J_rownnz, m.ten_J_rowadr, m.ten_J_colind, m.tendon_armature, d.qvel, ten_Jdot],
     outputs=[ten_bias_coef],
   )
 
-  wp.launch(
+  warp_util.launch(
     _tendon_bias_qfrc,
     dim=(d.nworld, m.ntendon, m.max_ten_J_rownnz),
     inputs=[m.ten_J_rownnz, m.ten_J_rowadr, m.ten_J_colind, m.tendon_armature, d.ten_J, ten_bias_coef],
@@ -2110,9 +2111,9 @@ def com_vel(m: Model, d: Data):
   Propagates velocities down the kinematic tree, updating the spatial velocity and
   derivative for each body.
   """
-  wp.launch(_comvel_root, dim=(d.nworld, 6), inputs=[], outputs=[d.cvel])
+  warp_util.launch(_comvel_root, dim=(d.nworld, 6), inputs=[], outputs=[d.cvel])
 
-  wp.launch(
+  warp_util.launch(
     _comvel_branch,
     dim=(d.nworld, m.nbranch),
     inputs=[
@@ -2747,7 +2748,7 @@ def transmission(m: Model, d: Data):
   else:
     moment_nnz = wp.zeros((d.nworld,), dtype=int)
 
-  wp.launch(
+  warp_util.launch(
     _transmission,
     dim=(d.nworld, m.nu),
     inputs=[
@@ -2794,7 +2795,7 @@ def transmission(m: Model, d: Data):
     else:
       ncon = wp.zeros((d.nworld, m.nacttrnbody), dtype=int)
 
-    wp.launch(
+    warp_util.launch(
       _transmission_body_moment,
       dim=(m.nacttrnbody, d.naconmax, m.nv),
       inputs=[
@@ -2828,7 +2829,7 @@ def transmission(m: Model, d: Data):
     )
 
     # scale moments
-    wp.launch(
+    warp_util.launch(
       _transmission_body_moment_scale,
       dim=(d.nworld, m.nacttrnbody, m.nv),
       inputs=[m.actuator_trntype_body_adr, d.moment_rowadr, ncon],
@@ -2913,7 +2914,7 @@ def _solve_LD_sparse(
     # Fallback for CPU
     dim_block = 1
 
-  wp.launch(
+  warp_util.launch(
     _solve_LD_sparse_fused(m.nv, nlevels),
     dim=(d.nworld, dim_block),
     inputs=[L, D, m.qLD_all_updates, m.qLD_level_offsets, y],
@@ -2950,7 +2951,7 @@ def _tile_cholesky_solve(tile: TileSet):
 def _solve_LD_dense(m: Model, d: Data, L: wp.array3d[float], x: wp.array2d[float], y: wp.array2d[float]):
   """Computes dense backsubstitution: x = inv(U.T @ U) * y."""
   for tile in m.M_tiles:
-    wp.launch_tiled(
+    warp_util.launch_tiled(
       _tile_cholesky_solve(tile),
       dim=(d.nworld, tile.adr.size),
       inputs=[L, y, tile.adr],
@@ -3040,7 +3041,7 @@ def _factor_solve_i_dense(
 ):
   for tile in m.M_tiles:
     if _USE_BATCHED_CHOLESKY and tile.size <= _BATCHED_CHOLESKY_MAX_DIM:
-      wp.launch_tiled(
+      warp_util.launch_tiled(
         batched_factor_solve_i(tile.size),
         dim=(d.nworld, tile.adr.size),
         inputs=[M, y, tile.adr],
@@ -3048,7 +3049,7 @@ def _factor_solve_i_dense(
         block_dim=64,
       )
     else:
-      wp.launch_tiled(
+      warp_util.launch_tiled(
         _tile_cholesky_factorize_solve(tile),
         dim=(d.nworld, tile.adr.size),
         inputs=[M, y, tile.adr],
@@ -3199,7 +3200,7 @@ def factor_solve_lu(m: Model, d: Data, qLU: wp.array3d[float], qacc: wp.array2d[
     qacc: output array for the solution.
     qfrc: input right-hand side.
   """
-  wp.launch(
+  warp_util.launch(
     _factor_solve_lu_sparse_fused(m.nv),
     dim=(d.nworld,),
     inputs=[m.D_rownnz, m.D_rowadr, m.D_diag, m.D_colind, qfrc],
@@ -3329,7 +3330,7 @@ def subtree_vel(m: Model, d: Data):
   subtree_bodyvel = wp.empty((d.nworld, m.nbody), dtype=wp.spatial_vector)
 
   # bodywise quantities
-  wp.launch(
+  warp_util.launch(
     _subtree_vel_forward,
     dim=(d.nworld, m.nbody),
     inputs=[m.body_rootid, m.body_mass, m.body_inertia, d.xipos, d.ximat, d.subtree_com, d.cvel],
@@ -3338,7 +3339,7 @@ def subtree_vel(m: Model, d: Data):
 
   # sum body linear momentum recursively up the kinematic tree
   for body_tree in reversed(m.body_tree):
-    wp.launch(
+    warp_util.launch(
       _linear_momentum,
       dim=[d.nworld, body_tree.size],
       inputs=[m.body_parentid, m.body_subtreemass, d.subtree_linvel, body_tree],
@@ -3346,7 +3347,7 @@ def subtree_vel(m: Model, d: Data):
     )
 
   for body_tree in reversed(m.body_tree):
-    wp.launch(
+    warp_util.launch(
       _angular_momentum,
       dim=[d.nworld, body_tree.size],
       inputs=[
@@ -3919,7 +3920,7 @@ def tendon(m: Model, d: Data):
   wrap_geom_xpos = wp.empty((d.nworld, m.nwrap), dtype=wp.spatial_vector)
 
   # process joint tendons
-  wp.launch(
+  warp_util.launch(
     _joint_tendon,
     dim=(d.nworld, m.wrap_jnt_adr.size),
     inputs=[
@@ -3945,7 +3946,7 @@ def tendon(m: Model, d: Data):
     d.wrap_obj.zero_()
 
   # process spatial site tendons
-  wp.launch(
+  warp_util.launch(
     _spatial_site_tendon,
     dim=(d.nworld, m.wrap_site_pair_adr.size),
     inputs=[
@@ -3969,7 +3970,7 @@ def tendon(m: Model, d: Data):
   )
 
   # process spatial geom tendons
-  wp.launch(
+  warp_util.launch(
     _spatial_geom_tendon,
     dim=(d.nworld, m.wrap_geom_adr.size),
     inputs=[
@@ -3999,7 +4000,7 @@ def tendon(m: Model, d: Data):
   )
 
   if spatial_site or spatial_geom:
-    wp.launch(
+    warp_util.launch(
       _spatial_tendon_wrap,
       dim=d.nworld,
       inputs=[m.ntendon, m.tendon_adr, m.tendon_num, m.wrap_type, m.wrap_objid, d.site_xpos, wrap_geom_xpos],

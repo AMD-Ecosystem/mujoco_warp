@@ -15,9 +15,12 @@
 
 import functools
 import inspect
+import os
 import warnings
 
+import numpy as np
 import warp as wp
+import warp._src.context as _wp_context
 
 _STACK = None
 
@@ -139,6 +142,87 @@ def cache_kernel(func):
     return _KERNEL_CACHE[key]
 
   return wrapper
+
+
+_LAUNCH_CACHE_ENABLED = os.environ.get("MJW_LAUNCH_CACHE", "1") != "0"
+_LAUNCH_CACHE_MAX = 8192
+_LAUNCH_CACHE = {}
+_LAUNCH_SEEN = {}
+_VALUE_ARG_TYPES = frozenset((int, float, bool, type(None), np.int32, np.int64, np.float32, np.float64, np.bool_))
+
+
+def _launch_key(kernel, dim, inputs, outputs, device, block_dim, max_blocks):
+  key = [kernel, dim if type(dim) is int else tuple(dim), id(device), block_dim, max_blocks]
+  for args in (inputs, outputs):
+    for a in args:
+      t = type(a)
+      if t in _VALUE_ARG_TYPES:
+        key.append(a)
+      elif isinstance(a, wp.array):
+        key.append(id(a))
+      else:
+        return None
+  return tuple(key)
+
+
+def launch(kernel, dim, inputs=(), outputs=(), device=None, stream=None, max_blocks: int = 0, block_dim: int = 256):
+  """Drop-in for wp.launch that replays recorded launches for repeated argument sets.
+
+  wp.launch re-packs every argument on each call (~15 us of host time for a typical
+  solver kernel), which dominates step time when the GPU work per kernel is small. A
+  launch whose kernel, dims and arguments (arrays by identity, scalars by value) repeat is
+  recorded once with record_cmd=True and replayed afterwards. Entries hold references to
+  their arrays, so an id in a key always refers to the same live array; keys are only
+  cached on their second occurrence so per-call temporaries are not kept alive.
+  """
+  if stream is not None:
+    device = stream.device
+  device = _wp_context.runtime.get_device(device)
+
+  if not _LAUNCH_CACHE_ENABLED or _wp_context.runtime.tape is not None or wp.config.print_launches or _wp_context.runtime._apic_capture is not None:
+    return wp.launch(
+      kernel, dim, inputs=inputs, outputs=outputs, device=device, stream=stream, max_blocks=max_blocks, block_dim=block_dim
+    )
+
+  key = _launch_key(kernel, dim, inputs, outputs, device, block_dim, max_blocks)
+  entry = _LAUNCH_CACHE.get(key) if key is not None else None
+  if entry is None:
+    if key is None or key not in _LAUNCH_SEEN:
+      if key is not None:
+        if len(_LAUNCH_SEEN) >= _LAUNCH_CACHE_MAX:
+          _LAUNCH_SEEN.clear()
+        _LAUNCH_SEEN[key] = None
+      return wp.launch(
+        kernel, dim, inputs=inputs, outputs=outputs, device=device, stream=stream, max_blocks=max_blocks, block_dim=block_dim
+      )
+    cmd = wp.launch(
+      kernel,
+      dim,
+      inputs=inputs,
+      outputs=outputs,
+      device=device,
+      max_blocks=max_blocks,
+      block_dim=block_dim,
+      record_cmd=True,
+    )
+    if len(_LAUNCH_CACHE) >= _LAUNCH_CACHE_MAX:
+      _LAUNCH_CACHE.clear()
+    entry = _LAUNCH_CACHE[key] = (cmd, tuple(inputs), tuple(outputs))
+
+  cmd = entry[0]
+  if cmd is not None:
+    cmd.launch(stream)
+
+
+def launch_tiled(kernel, dim, inputs=(), outputs=(), device=None, stream=None, max_blocks: int = 0, block_dim: int = 256):
+  """Drop-in for wp.launch_tiled backed by the launch cache."""
+  if stream is not None:
+    device = stream.device
+  device = _wp_context.runtime.get_device(device)
+  if device.is_cpu:
+    block_dim = 1
+  dim = (dim,) if type(dim) is int else tuple(dim)
+  return launch(kernel, dim + (block_dim,), inputs, outputs, device, stream, max_blocks, block_dim)
 
 
 def check_toolkit_driver():

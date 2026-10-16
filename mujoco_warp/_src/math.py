@@ -331,3 +331,10 @@ def upper_trid_index(n: int, i: int, j: int) -> int:
   if j < i:
     i, j = j, i
   return (i * (2 * n - i - 1)) // 2 + j
+
+
+def upper_trid_index_host(n: int, i: int, j: int) -> int:
+  """Host-side upper_trid_index (calling the wp.func from Python goes through slow builtin dispatch)."""
+  if j < i:
+    i, j = j, i
+  return (i * (2 * n - i - 1)) // 2 + j

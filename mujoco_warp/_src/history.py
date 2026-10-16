@@ -14,6 +14,7 @@
 # ==============================================================================
 
 import warp as wp
+from mujoco_warp._src import warp_util
 
 from mujoco_warp._src.types import MJ_MAXVAL
 from mujoco_warp._src.types import MJ_MINVAL
@@ -513,7 +514,7 @@ def read_ctrl_delayed(m: Model, d: Data, ctrl: wp.array2d[float]):
     wp.copy(ctrl, d.ctrl)
     return
 
-  wp.launch(
+  warp_util.launch(
     _read_ctrl_delayed_kernel,
     dim=(d.nworld, m.nu),
     inputs=[
@@ -533,7 +534,7 @@ def insert_ctrl_history(m: Model, d: Data):
   if m.nhistory == 0 or m.nu == 0:
     return
 
-  wp.launch(
+  warp_util.launch(
     _insert_ctrl_history_kernel,
     dim=(d.nworld, m.nu),
     inputs=[
@@ -561,7 +562,7 @@ def apply_sensor_delay(m: Model, d: Data, sensorid: wp.array[int]):
   wp.copy(fresh_sensordata, d.sensordata)
 
   # Read delayed values from buffer → overwrite sensordata
-  wp.launch(
+  warp_util.launch(
     _apply_sensor_delay_kernel,
     dim=(d.nworld, sensorid.shape[0]),
     inputs=[
@@ -579,7 +580,7 @@ def apply_sensor_delay(m: Model, d: Data, sensorid: wp.array[int]):
   )
 
   # Insert saved fresh sensor values into history buffers
-  wp.launch(
+  warp_util.launch(
     _insert_sensor_history_stage,
     dim=(d.nworld, sensorid.shape[0]),
     inputs=[
@@ -649,7 +650,7 @@ def read_ctrl(
     interp: interpolation mode (-1=model default, 0=ZOH, 1=linear, 2=cubic).
     result: output buffer (nworld,).
   """
-  wp.launch(
+  warp_util.launch(
     _read_ctrl_kernel,
     dim=(d.nworld,),
     inputs=[
@@ -733,7 +734,7 @@ def read_sensor(
     interp: interpolation mode (-1=model default, 0=ZOH, 1=linear, 2=cubic).
     result: output buffer (nworld, dim).
   """
-  wp.launch(
+  warp_util.launch(
     _read_sensor_kernel,
     dim=(d.nworld,),
     inputs=[
@@ -821,7 +822,7 @@ def init_ctrl_history(
   if times is None:
     times = wp.empty(0, dtype=float)
 
-  wp.launch(
+  warp_util.launch(
     _init_ctrl_history_kernel,
     dim=(d.nworld,),
     inputs=[
@@ -908,7 +909,7 @@ def init_sensor_history(
   if times is None:
     times = wp.empty(0, dtype=float)
 
-  wp.launch(
+  warp_util.launch(
     _init_sensor_history_kernel,
     dim=(d.nworld,),
     inputs=[

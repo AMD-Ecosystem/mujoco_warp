@@ -18,6 +18,7 @@ import warp as wp
 from mujoco_warp._src import math
 from mujoco_warp._src import support
 from mujoco_warp._src import types
+from mujoco_warp._src import warp_util
 from mujoco_warp._src.types import ConstraintType
 from mujoco_warp._src.types import ContactType
 from mujoco_warp._src.types import DisableBit
@@ -2504,7 +2505,7 @@ def make_constraint(m: types.Model, d: types.Data):
   """Creates constraint jacobians and other supporting data."""
   efc_nnz = wp.empty((d.nworld,), dtype=int)
 
-  wp.launch(
+  warp_util.launch(
     _zero_constraint_counts,
     dim=d.nworld,
     inputs=[d.ne, d.nf, d.nl, d.nefc, efc_nnz],
@@ -2512,7 +2513,7 @@ def make_constraint(m: types.Model, d: types.Data):
 
   if not (m.opt.disableflags & types.DisableBit.CONSTRAINT):
     if not (m.opt.disableflags & types.DisableBit.EQUALITY):
-      wp.launch(
+      warp_util.launch(
         _equality_connect,
         dim=(d.nworld, m.eq_connect_adr.size),
         inputs=[
@@ -2572,7 +2573,7 @@ def make_constraint(m: types.Model, d: types.Data):
           efc_nnz,
         ],
       )
-      wp.launch(
+      warp_util.launch(
         _equality_weld,
         dim=(d.nworld, m.eq_wld_adr.size),
         inputs=[
@@ -2634,7 +2635,7 @@ def make_constraint(m: types.Model, d: types.Data):
           efc_nnz,
         ],
       )
-      wp.launch(
+      warp_util.launch(
         _equality_joint,
         dim=(d.nworld, m.eq_jnt_adr.size),
         inputs=[
@@ -2676,7 +2677,7 @@ def make_constraint(m: types.Model, d: types.Data):
           efc_nnz,
         ],
       )
-      wp.launch(
+      warp_util.launch(
         _equality_tendon,
         dim=(d.nworld, m.eq_ten_adr.size),
         inputs=[
@@ -2721,7 +2722,7 @@ def make_constraint(m: types.Model, d: types.Data):
         ],
       )
 
-      wp.launch(
+      warp_util.launch(
         _equality_flex(m.is_sparse),
         dim=(d.nworld, m.eq_flex_adr.size, m.nflexedge),
         inputs=[
@@ -2766,7 +2767,7 @@ def make_constraint(m: types.Model, d: types.Data):
       )
 
     if not (m.opt.disableflags & types.DisableBit.FRICTIONLOSS):
-      wp.launch(
+      warp_util.launch(
         _friction_dof,
         dim=(d.nworld, m.nv),
         inputs=[
@@ -2801,7 +2802,7 @@ def make_constraint(m: types.Model, d: types.Data):
         ],
       )
 
-      wp.launch(
+      warp_util.launch(
         _friction_tendon,
         dim=(d.nworld, m.ntendon),
         inputs=[
@@ -2842,7 +2843,7 @@ def make_constraint(m: types.Model, d: types.Data):
 
     # limit
     if not (m.opt.disableflags & types.DisableBit.LIMIT):
-      wp.launch(
+      warp_util.launch(
         _limit_ball,
         dim=(d.nworld, m.jnt_limited_ball_adr.size),
         inputs=[
@@ -2882,7 +2883,7 @@ def make_constraint(m: types.Model, d: types.Data):
         ],
       )
 
-      wp.launch(
+      warp_util.launch(
         _limit_slide_hinge,
         dim=(d.nworld, m.jnt_limited_slide_hinge_adr.size),
         inputs=[
@@ -2922,7 +2923,7 @@ def make_constraint(m: types.Model, d: types.Data):
         ],
       )
 
-      wp.launch(
+      warp_util.launch(
         _limit_tendon,
         dim=(d.nworld, m.tendon_limited_adr.size),
         inputs=[
@@ -2984,7 +2985,7 @@ def make_constraint(m: types.Model, d: types.Data):
         copy=False,
       )
 
-      wp.launch(
+      warp_util.launch(
         _efc_contact_init(m.opt.cone, m.is_sparse),
         dim=d.naconmax,
         inputs=[
@@ -3018,7 +3019,7 @@ def make_constraint(m: types.Model, d: types.Data):
       )
 
       if m.is_sparse:
-        wp.launch(
+        warp_util.launch(
           _efc_contact_jac_sparse(m.opt.cone),
           dim=(d.naconmax, nmaxdim),
           inputs=[
@@ -3060,7 +3061,7 @@ def make_constraint(m: types.Model, d: types.Data):
         tile_size = m.block_dim.contact_jac_tiled
         n_dof_blocks = (m.nv_pad + tile_size - 1) // tile_size
 
-        wp.launch_tiled(
+        warp_util.launch_tiled(
           _efc_contact_jac_dense(tile_size, m.opt.cone),
           dim=(d.nworld, n_dof_blocks),
           inputs=[
@@ -3095,7 +3096,7 @@ def make_constraint(m: types.Model, d: types.Data):
           block_dim=tile_size,
         )
 
-      wp.launch(
+      warp_util.launch(
         _efc_contact_update(m.opt.cone),
         dim=(d.naconmax, nmaxdim),
         inputs=[

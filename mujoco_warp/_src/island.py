@@ -16,6 +16,7 @@
 import warp as wp
 
 from mujoco_warp._src import types
+from mujoco_warp._src import warp_util
 from mujoco_warp._src.types import ConstraintType
 from mujoco_warp._src.types import EqType
 from mujoco_warp._src.types import IslandSolverContext
@@ -172,7 +173,7 @@ def _tree_edges(
 def tree_edges(m: types.Model, d: types.Data, tree_tree: wp.array3d[int]):
   """Compute tree-tree adjacency matrix."""
   tree_tree.zero_()
-  wp.launch(
+  warp_util.launch(
     kernel=_tree_edges,
     dim=(d.nworld, d.njmax),
     inputs=[
@@ -269,7 +270,7 @@ def flood_fill(m: types.Model, d: types.Data, tree_tree: wp.array3d[int]):
   d.tree_island.fill_(-1)
   stack_scratch = wp.empty((d.nworld, m.ntree * m.ntree), dtype=int)
 
-  wp.launch(
+  warp_util.launch(
     _flood_fill,
     dim=d.nworld,
     inputs=[m.ntree, tree_tree, d.tree_island, stack_scratch],
@@ -845,7 +846,7 @@ def compute_island_mapping(m: types.Model, d: types.Data, ctx: IslandSolverConte
     d.iqacc_smooth = wp.empty((nw, m.nv), dtype=float)
     d.iqfrc_smooth = wp.empty((nw, m.nv), dtype=float)
     d.iqfrc_constraint = wp.empty((nw, m.nv), dtype=float)
-  wp.launch(
+  warp_util.launch(
     _init_island_arrays,
     dim=(d.nworld, m.ntree),
     inputs=[],
@@ -859,21 +860,21 @@ def compute_island_mapping(m: types.Model, d: types.Data, ctx: IslandSolverConte
       d.nidof,
     ],
   )
-  wp.launch(
+  warp_util.launch(
     _init_dof_arrays,
     dim=(d.nworld, m.nv),
     inputs=[],
     outputs=[d.dof_island, d.map_dof2idof, d.map_idof2dof, d.dof_islandid],
   )
   efc_tree = wp.empty((d.nworld, d.njmax), dtype=int)
-  wp.launch(
+  warp_util.launch(
     _init_efc_arrays,
     dim=(d.nworld, d.njmax),
     inputs=[],
     outputs=[d.efc.island, d.map_efc2iefc, d.map_iefc2efc, d.efc_islandid, efc_tree],
   )
 
-  wp.launch(
+  warp_util.launch(
     _compute_efc_tree,
     dim=(d.nworld, d.njmax),
     inputs=[
@@ -902,7 +903,7 @@ def compute_island_mapping(m: types.Model, d: types.Data, ctx: IslandSolverConte
   )
 
   # 1. Count DOFs per island
-  wp.launch(
+  warp_util.launch(
     _island_count_dofs,
     dim=(d.nworld, m.nv),
     inputs=[m.dof_treeid, d.tree_island],
@@ -910,7 +911,7 @@ def compute_island_mapping(m: types.Model, d: types.Data, ctx: IslandSolverConte
   )
 
   # 2. Count Constraints per island
-  wp.launch(
+  warp_util.launch(
     _island_count_constraints,
     dim=(d.nworld, d.njmax),
     inputs=[d.nefc, d.njmax, efc_tree, d.tree_island, d.efc.type],
@@ -918,7 +919,7 @@ def compute_island_mapping(m: types.Model, d: types.Data, ctx: IslandSolverConte
   )
 
   # 3. Scan sizes and reset counters for mapping
-  wp.launch(
+  warp_util.launch(
     _island_scan_sizes,
     dim=d.nworld,
     inputs=[d.nisland],
@@ -927,7 +928,7 @@ def compute_island_mapping(m: types.Model, d: types.Data, ctx: IslandSolverConte
 
   # 4. Map DOFs
   unconstrained_cnt = wp.zeros((d.nworld, 1), dtype=int)
-  wp.launch(
+  warp_util.launch(
     _island_map_dofs,
     dim=d.nworld,
     inputs=[m.nv, d.dof_island, d.island_dofadr, d.nidof],
@@ -939,7 +940,7 @@ def compute_island_mapping(m: types.Model, d: types.Data, ctx: IslandSolverConte
   nf_mapped = wp.zeros((d.nworld, m.ntree), dtype=int)
   nother_mapped = wp.zeros((d.nworld, m.ntree), dtype=int)
 
-  wp.launch(
+  warp_util.launch(
     _island_map_constraints,
     dim=d.nworld,
     inputs=[
@@ -959,7 +960,7 @@ def compute_island_mapping(m: types.Model, d: types.Data, ctx: IslandSolverConte
 
   # 6. Scan Sparse Rows (if sparse)
   if m.is_sparse:
-    wp.launch(
+    warp_util.launch(
       _island_scan_sparse_rows,
       dim=d.nworld,
       inputs=[d.nisland, d.efc.J_rownnz, d.island_nefc, d.island_efcadr, d.map_iefc2efc],
@@ -982,7 +983,7 @@ def gather_island_inputs(m: types.Model, d: types.Data, ctx: IslandSolverContext
     ctx: IslandSolverContext whose arrays are populated.
   """
   # Gather constraint arrays and dense Jacobian (fused)
-  wp.launch(
+  warp_util.launch(
     _gather_efc_and_jacobian,
     dim=(d.nworld, d.njmax),
     inputs=[
@@ -1016,7 +1017,7 @@ def gather_island_inputs(m: types.Model, d: types.Data, ctx: IslandSolverContext
   )
 
   # Gather DOF arrays
-  wp.launch(
+  warp_util.launch(
     _gather_dof_arrays,
     dim=(d.nworld, m.nv),
     inputs=[
@@ -1049,7 +1050,7 @@ def scatter_island_results(m: types.Model, d: types.Data, ctx: IslandSolverConte
     scatter_Ma: Whether to scatter Ma for Euler/implicit integrators.
   """
   # Scatter DOF results (and optionally Ma for Euler/implicit integrators)
-  wp.launch(
+  warp_util.launch(
     _scatter_dof_arrays,
     dim=(d.nworld, m.nv),
     inputs=[
@@ -1070,7 +1071,7 @@ def scatter_island_results(m: types.Model, d: types.Data, ctx: IslandSolverConte
   )
 
   # Scatter constraint results (force and state from island-local arrays)
-  wp.launch(
+  warp_util.launch(
     _scatter_efc_arrays,
     dim=(d.nworld, d.njmax),
     inputs=[
