@@ -17,6 +17,7 @@ import functools
 import inspect
 import os
 import warnings
+import weakref
 
 import numpy as np
 import warp as wp
@@ -173,7 +174,10 @@ def launch(kernel, dim, inputs=(), outputs=(), device=None, stream=None, max_blo
   launch whose kernel, dims and arguments (arrays by identity, scalars by value) repeat is
   recorded once with record_cmd=True and replayed afterwards. Entries hold references to
   their arrays, so an id in a key always refers to the same live array; keys are only
-  cached on their second occurrence so per-call temporaries are not kept alive.
+  cached on their second occurrence so per-call temporaries are not kept alive. The first
+  occurrence is remembered through weak references: a freed temporary's id is often
+  reused by the next call's temporary, which must not count as a repeat (each false
+  repeat would pin that temporary in the cache).
   """
   if stream is not None:
     device = stream.device
@@ -187,11 +191,13 @@ def launch(kernel, dim, inputs=(), outputs=(), device=None, stream=None, max_blo
   key = _launch_key(kernel, dim, inputs, outputs, device, block_dim, max_blocks)
   entry = _LAUNCH_CACHE.get(key) if key is not None else None
   if entry is None:
-    if key is None or key not in _LAUNCH_SEEN:
+    arrays = [a for args in (inputs, outputs) for a in args if isinstance(a, wp.array)] if key is not None else ()
+    seen = _LAUNCH_SEEN.get(key) if key is not None else None
+    if seen is None or any(r() is not a for r, a in zip(seen, arrays)):
       if key is not None:
         if len(_LAUNCH_SEEN) >= _LAUNCH_CACHE_MAX:
           _LAUNCH_SEEN.clear()
-        _LAUNCH_SEEN[key] = None
+        _LAUNCH_SEEN[key] = tuple(weakref.ref(a) for a in arrays)
       return wp.launch(
         kernel, dim, inputs=inputs, outputs=outputs, device=device, stream=stream, max_blocks=max_blocks, block_dim=block_dim
       )
