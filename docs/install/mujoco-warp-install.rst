@@ -53,7 +53,7 @@ ROCm, and all other requirements.
 
    .. code-block:: bash
 
-      git clone -b amd-integration https://github.com/AMD-Ecosystem/mujoco_warp.git
+      git clone -b release/v3.8.1 https://github.com/AMD-Ecosystem/mujoco_warp.git
       cd mujoco_warp/
 
 2. Build the Docker image for your GPU architecture.
@@ -64,13 +64,13 @@ ROCm, and all other requirements.
 
          .. code-block:: bash
 
-            docker build --network=host -f docker/rocm/Dockerfile --target warp_gfx942 -t warp:rocm_7.2_ubuntu24.04_py3.12_torch2.9.1 .
+            docker build --network=host -f docker/rocm/Dockerfile --target mujocowarp_gfx942 -t mujocowarp_gfx942:rocm_7.2_ubuntu24.04_py3.12_torch2.9.1 .
 
       .. tab-item:: MI350X/MI355X (ROCm 10.1.0)
 
          .. code-block:: bash
 
-            docker build --network=host -f docker/rocm/Dockerfile --target warp_gfx950 -t warp:rocm10.1.0_ubuntu24.04_py3.12_torch2.14.0 .
+            docker build --network=host -f docker/rocm/Dockerfile --target mujocowarp_gfx950 -t mujocowarp_gfx950:rocm10.1.0_ubuntu24.04_py3.12_torch2.14.0 .
 
 3. Start a Docker container using the image.
 
@@ -87,7 +87,7 @@ ROCm, and all other requirements.
             --name=my_mujoco_warp --cap-add=SYS_PTRACE \
             --security-opt seccomp=unconfined \
             --ipc=host --shm-size 16G \
-            warp:rocm_7.2_ubuntu24.04_py3.12_torch2.9.1
+            mujocowarp:rocm_7.2_ubuntu24.04_py3.12_torch2.9.1
 
       .. tab-item:: MI350X/MI355X (ROCm 10.1.0)
 
@@ -100,7 +100,7 @@ ROCm, and all other requirements.
             --name=my_mujoco_warp --cap-add=SYS_PTRACE \
             --security-opt seccomp=unconfined \
             --ipc=host --shm-size 16G \
-            warp:rocm10.1.0_ubuntu24.04_py3.12_torch2.14.0
+            mujocowarp:rocm10.1.0_ubuntu24.04_py3.12_torch2.14.0
 
 3. The above step creates a Docker container with Warp pre-installed. Continue to
    :ref:`test-the-mujoco-warp-installation`.
