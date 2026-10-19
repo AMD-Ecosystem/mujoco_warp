@@ -125,6 +125,27 @@ docstring-code-line-length = 100
 testpaths = ["mujoco_warp"]
 norecursedirs = ["benchmarks", "contrib"]
 
+[tool.coverage.run]
+source = ["mujoco_warp"]
+omit = [
+  "*_test.py",
+  "*/conftest.py",
+  "*/test_data/*",
+  "*/_src/cli.py",
+  "*/mujoco_warp/record.py",
+  "*/mujoco_warp/testspeed.py",
+  "*/mujoco_warp/viewer.py",
+]
+
+[tool.coverage.report]
+# Warp kernels and functions are compiled and run on the device, so coverage.py
+# can never see them execute.
+exclude_also = [
+  "@wp\\.kernel\\b",
+  "@wp\\.func\\b",
+  "@wp\\.func_native\\b",
+]
+
 [tool.setuptools]
 package-data = { "mujoco_warp" = ["test_data/**"] }
 
