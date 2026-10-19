@@ -28,7 +28,11 @@ from mujoco_warp._src import warp_util
 from mujoco_warp._src.batched_cholesky import BATCHED_CHOLESKY_MAX_DIM as _BATCHED_CHOLESKY_MAX_DIM
 from mujoco_warp._src.batched_cholesky import SERIAL_CHOLESKY_MAX_DIM as _SERIAL_CHOLESKY_MAX_DIM
 from mujoco_warp._src.batched_cholesky import USE_BATCHED_CHOLESKY as _USE_BATCHED_CHOLESKY
+from mujoco_warp._src.batched_cholesky import USE_READLANE_CHOLESKY as _USE_READLANE_CHOLESKY
 from mujoco_warp._src.batched_cholesky import batched_cholesky_factorize_solve
+from mujoco_warp._src.batched_cholesky import readlane_cholesky_factorize_solve
+from mujoco_warp._src.batched_cholesky import readlane_h_incremental
+from mujoco_warp._src.batched_cholesky import readlane_jtdaj_dense
 from mujoco_warp._src.batched_cholesky import serial_cholesky_factorize_solve
 from mujoco_warp._src.block_cholesky import create_blocked_cholesky_factorize_solve_func
 from mujoco_warp._src.block_cholesky import create_blocked_cholesky_solve_func
@@ -47,6 +51,7 @@ _BLOCK_CHOLESKY_DIM = 32
 _LINESEARCH_GROUP_LANES = int(os.environ.get("MJW_LINESEARCH_GROUP_LANES", "32"))
 _LINESEARCH_GROUP_JV_MODE = int(os.environ.get("MJW_LINESEARCH_GROUP_JV_MODE", "1"))
 _SOLVER_CHECK_ASYNC = os.environ.get("MJW_SOLVER_CHECK", "async") == "async"
+_SOLVER_CHECK_LAG = max(1, int(os.environ.get("MJW_SOLVER_CHECK_LAG", "1")))
 
 
 def create_inverse_context(m: types.Model, d: types.Data) -> InverseContext:
@@ -3333,6 +3338,14 @@ def _cholesky_factorize_solve(m: types.Model, d: types.Data, ctx: SolverContext,
       outputs=[ctx.Mgrad],
       block_dim=64,
     )
+  elif _USE_BATCHED_CHOLESKY and _USE_READLANE_CHOLESKY and m.nv <= _BATCHED_CHOLESKY_MAX_DIM and wp.get_device().is_hip:
+    warp_util.launch(
+      readlane_cholesky_factorize_solve(m.nv),
+      dim=d.nworld * 64,
+      inputs=[ctx.grad, ctx.h, ctx.done],
+      outputs=[ctx.Mgrad],
+      block_dim=64,
+    )
   elif _USE_BATCHED_CHOLESKY and m.nv <= _BATCHED_CHOLESKY_MAX_DIM:
     warp_util.launch_tiled(
       batched_cholesky_factorize_solve(m.nv, m.nv_pad),
@@ -3458,6 +3471,14 @@ def _update_gradient(m: types.Model, d: types.Data, ctx: SolverContext, fused_in
         dim=(d.nworld, m.M_fullm_upper_i.size),
         inputs=[m.M_fullm_upper_i, m.M_fullm_upper_j, m.M_fullm_upper_elemid, d.M, ctx.done],
         outputs=[ctx.h],
+      )
+    elif _USE_READLANE_CHOLESKY and m.nv <= _BATCHED_CHOLESKY_MAX_DIM and wp.get_device().is_hip:
+      warp_util.launch(
+        readlane_jtdaj_dense(m.nv, types.ConstraintState.QUADRATIC.value),
+        dim=d.nworld * 64,
+        inputs=[d.nefc, d.M, d.efc.J, d.efc.D, d.efc.state, ctx.done],
+        outputs=[ctx.h],
+        block_dim=64,
       )
     else:
       with scoped_mathdx_gemm_disabled():
@@ -3593,6 +3614,14 @@ def _update_gradient_incremental(m: types.Model, d: types.Data, ctx: SolverConte
         ctx.changed_efc_count,
       ],
       outputs=[ctx.h],
+    )
+  elif _USE_READLANE_CHOLESKY and m.nv <= _BATCHED_CHOLESKY_MAX_DIM and wp.get_device().is_hip:
+    warp_util.launch(
+      readlane_h_incremental(m.nv, types.ConstraintState.QUADRATIC.value),
+      dim=d.nworld * 64,
+      inputs=[d.efc.J, d.efc.D, d.efc.state, ctx.changed_efc_ids, ctx.changed_efc_count],
+      outputs=[ctx.h],
+      block_dim=64,
     )
   else:
     tri_dim = m.nv * (m.nv + 1) // 2
@@ -3933,7 +3962,7 @@ def _solve(m: types.Model, d: types.Data, ctx: SolverContext):
     # Samples convergence every N_CHECK iterations to reduce D2H overhead.
     # Each check is a full stream drain + D2H readback, so it trades solver
     # early-exit granularity against pipeline-stall count; env-tunable so the
-    # balance can be swept (MJW_SOLVER_NCHECK, default 3).
+    # balance can be swept (MJW_SOLVER_NCHECK, default 1 async / 3 sync).
     N_CHECK = max(1, int(os.environ.get("MJW_SOLVER_NCHECK", "1" if _SOLVER_CHECK_ASYNC else "3")))
     _dev = wp.get_device()
     # AMD: skip D2H sync during hipGraph capture (synchronize_stream forbidden)
@@ -3943,16 +3972,20 @@ def _solve(m: types.Model, d: types.Data, ctx: SolverContext):
     # a graph is being captured — pinned allocation during capture is illegal.
     if not hasattr(d, "_nsolving_host") and not _in_capture:
       d._nsolving_host = wp.empty(1, dtype=int, device="cpu", pinned=True)
-    # async: poll a non-blocking D2H copy instead of draining the stream; worlds never
-    # un-converge, so a zero read from an earlier iteration is still valid
+    # async: read the D2H copy one iteration late instead of draining the stream, so the
+    # GPU keeps working while the host waits; worlds never un-converge, so a zero read from
+    # an earlier iteration is still valid. The wait is required: without it a GPU-bound
+    # host runs every iteration up to opt.iterations before the copy lands.
     check_async = _SOLVER_CHECK_ASYNC and not _in_capture
     if check_async and not hasattr(d, "_nsolving_event"):
       d._nsolving_event = wp.Event()
     pending = False
+    pending_iter = 0
     for i in range(m.opt.iterations):
       _solver_iteration(m, d, ctx, step_size_cost, nsolving)
       if check_async:
-        if pending and d._nsolving_event.is_complete:
+        if pending and (i - pending_iter >= _SOLVER_CHECK_LAG or d._nsolving_event.is_complete):
+          wp.synchronize_event(d._nsolving_event)
           pending = False
           if d._nsolving_host.numpy()[0] == 0:
             break
@@ -3960,6 +3993,7 @@ def _solve(m: types.Model, d: types.Data, ctx: SolverContext):
           wp.copy(d._nsolving_host, nsolving)
           wp.record_event(d._nsolving_event)
           pending = True
+          pending_iter = i
       elif not _in_capture and (i + 1) % N_CHECK == 0:
         wp.copy(d._nsolving_host, nsolving)
         wp.synchronize_stream(_dev)  # stream-scoped sync: ~2µs

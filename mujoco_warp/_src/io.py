@@ -123,12 +123,17 @@ def _create_constraint(
   return types.Constraint(**efc_kwargs)
 
 
+# AMD: the dense solver path stays faster than sparse well past nv=32 on HIP (G1, nv=35:
+# ~30% higher RL throughput), so jacobian="auto" switches to sparse at MuJoCo's own
+# threshold instead. Dense efc_J costs nworld * njmax * nv floats.
+_HIP_AUTO_SPARSE_NV = int(os.environ.get("MJW_HIP_AUTO_SPARSE_NV", "60"))
+
+
 def is_sparse(mjm: mujoco.MjModel) -> bool:
   if mjm.opt.jacobian == mujoco.mjtJacobian.mjJAC_AUTO:
-    if mjm.nv > 32:
-      return True
-    else:
-      return False
+    if wp.get_device().is_hip:
+      return mjm.nv >= _HIP_AUTO_SPARSE_NV
+    return mjm.nv > 32
   else:
     return bool(mujoco.mj_isSparse(mjm))
 
