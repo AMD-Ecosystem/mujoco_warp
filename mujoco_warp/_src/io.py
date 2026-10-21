@@ -1831,20 +1831,13 @@ def get_data_into(
       result.iefc_J[: nefc * mjm.nv] = iefc_J.flatten()
 
 
-def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
-  """Clear data, set defaults; optionally by world.
-
-  Args:
-    m: The model containing kinematic and dynamic information (device).
-    d: The data object containing the current state and output arrays (device).
-    reset: Per-world bitmask. Reset if True.
-  """
-
+@warp_util.cache_kernel
+def _reset_data_kernels(masked: bool):
   @wp.kernel(module="unique", enable_backward=False)
   def reset_xfrc_applied(reset_in: wp.array[bool], xfrc_applied_out: wp.array2d[wp.spatial_vector]):
     worldid, bodyid, elemid = wp.tid()
 
-    if wp.static(reset is not None):
+    if wp.static(masked):
       if not reset_in[worldid]:
         return
 
@@ -1854,7 +1847,7 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
   def reset_M(reset_in: wp.array[bool], M_out: wp.array3d[float]):
     worldid, elemid1, elemid2 = wp.tid()
 
-    if wp.static(reset is not None):
+    if wp.static(masked):
       if not reset_in[worldid]:
         return
 
@@ -1897,7 +1890,7 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
   ):
     worldid = wp.tid()
 
-    if wp.static(reset is not None):
+    if wp.static(masked):
       if not reset_in[worldid]:
         return
 
@@ -1942,7 +1935,7 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
   ):
     worldid, bodyid = wp.tid()
 
-    if wp.static(reset is not None):
+    if wp.static(masked):
       if not reset_in[worldid]:
         return
 
@@ -1983,7 +1976,7 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
       return
 
     worldid = contact_worldid_out[conid]
-    if wp.static(reset is not None):
+    if wp.static(masked):
       if worldid >= 0:
         if not reset_in[worldid]:
           return
@@ -2006,6 +1999,18 @@ def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
     contact_type_out[conid] = 0
     contact_geomcollisionid_out[conid] = 0
 
+  return reset_xfrc_applied, reset_M, reset_nworld, reset_mocap, reset_contact
+
+
+def reset_data(m: types.Model, d: types.Data, reset: Optional[wp.array] = None):
+  """Clear data, set defaults; optionally by world.
+
+  Args:
+    m: The model containing kinematic and dynamic information (device).
+    d: The data object containing the current state and output arrays (device).
+    reset: Per-world bitmask. Reset if True.
+  """
+  reset_xfrc_applied, reset_M, reset_nworld, reset_mocap, reset_contact = _reset_data_kernels(reset is not None)
   reset_input = reset or wp.ones(d.nworld, dtype=bool)
 
   wp.launch(reset_xfrc_applied, dim=(d.nworld, m.nbody, 6), inputs=[reset_input], outputs=[d.xfrc_applied])
