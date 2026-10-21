@@ -36,6 +36,8 @@ from mujoco_warp._src.batched_cholesky import readlane_jtdaj_dense
 from mujoco_warp._src.batched_cholesky import serial_cholesky_factorize_solve
 from mujoco_warp._src.block_cholesky import create_blocked_cholesky_factorize_solve_func
 from mujoco_warp._src.block_cholesky import create_blocked_cholesky_solve_func
+from mujoco_warp._src.fused_newton import solve_fused
+from mujoco_warp._src.fused_newton import use_fused_newton
 from mujoco_warp._src.types import InverseContext
 from mujoco_warp._src.types import IslandSolverContext
 from mujoco_warp._src.types import SolverContext
@@ -3934,6 +3936,10 @@ def _solve(m: types.Model, d: types.Data, ctx: SolverContext):
     inputs=[ctx.Mgrad],
     outputs=[ctx.search, ctx.search_dot],
   )
+
+  if use_fused_newton(m, d):
+    solve_fused(m, d, ctx)
+    return
 
   # persistent per-Data scratch: fresh arrays each solve would cost an allocation and
   # give the cached launches new argument identities every step
