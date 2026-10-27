@@ -22,7 +22,7 @@ and advance all worlds at once with ``mujoco_warp.step``.
 
 MuJoCo Warp on ROCm runs these kernels on AMD Instinct GPUs through the
 `ROCm port of Warp <https://github.com/AMD-Ecosystem/warp>`__, which adds a HIP backend to Warp.
-MJWarp itself is backend-agnostic, so the same Python code runs on AMD and NVIDIA GPUs.
+MJWarp itself is backend-agnostic.
 
 Why MuJoCo Warp?
 ====================================================================

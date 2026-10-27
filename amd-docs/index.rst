@@ -16,7 +16,7 @@ worlds for reinforcement learning, motion planning, and large-scale evaluation.
 GPU-accelerated version of the `MuJoCo <https://github.com/google-deepmind/mujoco>`__ physics
 simulator, written in `Warp <https://github.com/AMD-Ecosystem/warp>`__. MJWarp delivers high-throughput,
 accurate simulation of rigid bodies with contacts, soft bodies, cloth, signed distance fields,
-and more, and is maintained upstream by Google DeepMind and NVIDIA as part of the
+and more, and is maintained upstream by Google DeepMind as part of the
 `Newton <https://github.com/newton-physics/newton>`__ project.
 
 MuJoCo Warp on ROCm runs on AMD Instinct MI325X, MI350X, and MI355X GPUs through the

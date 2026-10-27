@@ -50,6 +50,11 @@ and the other requirements.
 
 2. Build the Docker image for your GPU architecture.
 
+   .. note::
+
+      To check which architecture your GPUs use, run ``rocm_agent_enumerator | sort -u``.
+      ``gfx942`` corresponds to MI325X, and ``gfx950`` corresponds to MI350X and MI355X.
+
    .. tab-set::
 
       .. tab-item:: AMD Instinct MI325X (ROCm 7.2.0)
@@ -105,11 +110,6 @@ and the other requirements.
                --shm-size=16g \
                mujocowarp:rocm10.1.0_ubuntu24.04_py3.12_torch2.14.0
 
-   .. note::
-
-      To check which architecture your GPUs use, run ``rocm_agent_enumerator | sort -u``.
-      ``gfx942`` corresponds to MI325X, and ``gfx950`` corresponds to MI350X and MI355X.
-
 .. _test-the-mujoco-warp-installation:
 
 Test the MuJoCo Warp installation
@@ -118,7 +118,7 @@ Test the MuJoCo Warp installation
 After starting the container, verify that MuJoCo Warp and ROCm are working correctly.
 The container has Warp and MuJoCo Warp installed.
 
-1. Verify that MuJoCo Warp detects your AMD GPUs.
+1. Verify that Warp detects your AMD GPUs.
 
    .. code-block:: bash
 
