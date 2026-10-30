@@ -8,16 +8,16 @@
 MuJoCo Warp on ROCm documentation
 ********************************************************************
 
-Accelerate physics simulation for robotics research with MuJoCo Warp on ROCm
-for AMD Instinct GPUs, enabling thousands of parallel, contact-rich simulation
-worlds for reinforcement learning, motion planning, and large-scale evaluation.
-
 `MuJoCo Warp (MJWarp) <https://mujoco.readthedocs.io/en/latest/mjwarp/index.html>`__ is a
 GPU-accelerated version of the `MuJoCo <https://github.com/google-deepmind/mujoco>`__ physics
 simulator, written in `Warp <https://github.com/AMD-Ecosystem/warp>`__. MJWarp delivers high-throughput,
 accurate simulation of rigid bodies with contacts, soft bodies, cloth, signed distance fields,
 and more, and is maintained upstream by Google DeepMind as part of the
 `Newton <https://github.com/newton-physics/newton>`__ project.
+
+Accelerate physics simulation for robotics research with MuJoCo Warp on ROCm
+for AMD Instinct GPUs, enabling thousands of parallel, contact-rich simulation
+worlds for reinforcement learning, motion planning, and large-scale evaluation.
 
 MuJoCo Warp on ROCm runs on AMD Instinct MI325X, MI350X, and MI355X GPUs through the
 `ROCm port of Warp <https://github.com/AMD-Ecosystem/warp>`__, which compiles Warp kernels for the HIP backend.
