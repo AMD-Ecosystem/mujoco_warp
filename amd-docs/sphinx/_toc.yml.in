@@ -17,6 +17,11 @@ subtrees:
   - file: examples/mujoco-warp-examples.rst
     title: Run a MuJoCo Warp example
 
+- caption: Reference
+  entries:
+  - url: https://mujoco.readthedocs.io/en/latest/mjwarp/index.html
+    title: API reference (upstream)
+
 - caption: About
   entries:
   - url: https://github.com/AMD-Ecosystem/mujoco_warp/blob/amd-integration/CONTRIBUTING.md
