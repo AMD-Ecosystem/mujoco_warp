@@ -39,13 +39,10 @@ dependencies = [
     "numpy",
 ]
 
-[[tool.uv.index]]
-name = "mujoco"
-url = "https://py.mujoco.org/"
-explicit = true
-
-[tool.uv.sources]
-mujoco = {index = "mujoco"}
+[tool.uv]
+environments = ["python_version >= '3.11'"]
+# Keep in sync with the mujoco pin in docker/rocm/Dockerfile.
+constraint-dependencies = ["mujoco==3.9.0"]
 
 [project.optional-dependencies]
 dev = [

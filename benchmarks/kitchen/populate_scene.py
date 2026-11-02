@@ -16,6 +16,7 @@
 """Populate a scene with a robot from MuJoCo Menagerie."""
 
 import os
+import shutil
 import subprocess
 import sys
 from typing import Sequence
@@ -83,10 +84,12 @@ def main(argv: Sequence[str]):
   # create directory with kitchen + robot assets
   input_dir = input_path.parents[0]
   combined_assets_path = f"{input_dir}/combined_assets/{_ROBOT.value}"
-  subprocess.run(f"mkdir -p {combined_assets_path}", shell=True, text=True)
-  subprocess.run(f"cp -r {input_dir}/assets {combined_assets_path}", shell=True, text=True)
+  os.makedirs(combined_assets_path, exist_ok=True)
+  shutil.copytree(f"{input_dir}/assets", f"{combined_assets_path}/assets", dirs_exist_ok=True)
   # TODO(team): robot without assets (eg, humanoid)
-  subprocess.run(f"cp -r {os.path.dirname(robot_path)}/assets {combined_assets_path}", shell=True, text=True)
+  robot_assets_path = f"{os.path.dirname(robot_path)}/assets"
+  if os.path.isdir(robot_assets_path):
+    shutil.copytree(robot_assets_path, f"{combined_assets_path}/assets", dirs_exist_ok=True)
 
   # robot position offset
   offset = [1.5, -1.5, 0.0]
