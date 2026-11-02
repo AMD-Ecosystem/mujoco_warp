@@ -87,6 +87,7 @@ and the other requirements.
                --privileged \
                --network=host \
                --group-add video \
+               --group-add "$(getent group render | cut -d: -f3)" \
                --cap-add=SYS_PTRACE \
                --security-opt seccomp=unconfined \
                --ipc=host \
@@ -104,11 +105,19 @@ and the other requirements.
                --privileged \
                --network=host \
                --group-add video \
+               --group-add "$(getent group render | cut -d: -f3)" \
                --cap-add=SYS_PTRACE \
                --security-opt seccomp=unconfined \
                --ipc=host \
                --shm-size=16g \
                mujocowarp:rocm10.1.0_ubuntu24.04_py3.12_torch2.14.0
+
+   .. note::
+
+      The container runs as the non-root ``warp`` user. The ``--group-add`` options give that
+      user access to the GPUs. The ``render`` group is passed by its numeric ID because the ID
+      differs between hosts. To install additional packages, add them to the Dockerfile and
+      rebuild the image, or start the container with ``--user root``.
 
 .. _test-the-mujoco-warp-installation:
 
@@ -142,11 +151,10 @@ The container has Warp and MuJoCo Warp installed.
 
       3.8.1
 
-3. Optionally, run the unit tests.
+3. Optionally, run the unit tests. ``pytest`` and ``pytest-xdist`` are preinstalled in the image.
 
    .. code-block:: bash
 
-      pip install pytest pytest-xdist
       pytest mujoco_warp -n 8
 
 If these commands succeed, MuJoCo Warp 3.8.1 has been installed successfully.

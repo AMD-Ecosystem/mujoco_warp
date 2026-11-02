@@ -3,12 +3,13 @@
 # Both targets copy the Warp repo into /workspace/warp, build the native
 # library and install it in editable mode, so the build context must be the
 # repo root. Build locally (from the repo root) with:
-#   docker build --network=host -f docker/rocm/Dockerfile --target warp_gfx942 -t <tag> .
+#   docker build --network=host -f docker/rocm/Dockerfile --target mujocowarp_gfx942 -t <tag> .
 #
 # Both targets run as the unprivileged `warp` user. GPU access needs the host's
-# GPU device groups, e.g.:
+# GPU device groups. Pass the host's render group by numeric ID, because it
+# differs between hosts and from the render group inside the image:
 #   docker run --device=/dev/kfd --device=/dev/dri \
-#     --group-add video --group-add render <tag>
+#     --group-add video --group-add "$(getent group render | cut -d: -f3)" <tag>
 
 ARG ROCM_VERSION=7.2
 ARG UBUNTU_VERSION=24.04
@@ -65,7 +66,7 @@ USER warp
 # ROCm 10.1.0 / gfx950 image for the Mujoco Warp workload.
 #
 # Build locally with:
-#   docker build --network=host -f docker/rocm/Dockerfile --target warp_gfx950 -t <tag> .
+#   docker build --network=host -f docker/rocm/Dockerfile --target mujocowarp_gfx950 -t <tag> .
 # -----------------------------------------------------------------------------
 FROM ${BASE_IMAGE} AS mujocowarp_gfx950
 
