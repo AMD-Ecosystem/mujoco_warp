@@ -27,17 +27,30 @@ CARTPOLE_XML = """
   <option timestep="0.01">
     <flag contact="disable"/>
   </option>
+  <visual>
+    <headlight ambient="0.3 0.3 0.3" diffuse="0.5 0.5 0.5"/>
+    <quality shadowsize="4096"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+  </visual>
+  <asset>
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.4 0.6 0.8" rgb2="0 0 0" width="512" height="512"/>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" width="512" height="512"/>
+    <material name="grid" texture="grid" texrepeat="8 4" reflectance="0.2"/>
+    <material name="rail" rgba="0.6 0.6 0.6 1" specular="0.5"/>
+    <material name="cart" rgba="0.9 0.5 0.2 1" specular="0.3" shininess="0.5"/>
+    <material name="pole" rgba="0.2 0.5 0.9 1" specular="0.3" shininess="0.5"/>
+  </asset>
   <worldbody>
-    <light pos="0 0 4"/>
-    <camera name="front" pos="0 -4 1" xyaxes="1 0 0 0 0.25 1"/>
-    <geom name="floor" type="plane" size="4 2 0.1" pos="0 0 -0.15" rgba="0.8 0.8 0.8 1"/>
-    <geom name="rail" type="box" size="2.4 0.02 0.02" rgba="0.3 0.3 0.3 1"/>
+    <light pos="0 -1 4" dir="0 0.25 -1" directional="true" castshadow="true" diffuse="0.6 0.6 0.6"/>
+    <camera name="front" pos="0 -3.2 0.9" xyaxes="1 0 0 0 0.3 1"/>
+    <geom name="floor" type="plane" size="0 0 0.05" pos="0 0 -0.15" material="grid"/>
+    <geom name="rail" type="box" size="2.4 0.02 0.02" material="rail"/>
     <body name="cart">
       <joint name="slider" type="slide" axis="1 0 0"/>
-      <geom name="cart" type="box" size="0.2 0.15 0.1" mass="1" rgba="0.9 0.5 0.2 1"/>
+      <geom name="cart" type="box" size="0.2 0.15 0.1" mass="1" material="cart"/>
       <body name="pole">
         <joint name="hinge" type="hinge" axis="0 1 0" damping="0.01"/>
-        <geom name="pole" type="capsule" fromto="0 0 0 0 0 1" size="0.045" mass="0.1" rgba="0.2 0.5 0.9 1"/>
+        <geom name="pole" type="capsule" fromto="0 0 0 0 0 1" size="0.045" mass="0.1" material="pole"/>
       </body>
     </body>
   </worldbody>

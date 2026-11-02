@@ -15,51 +15,42 @@
 
 """Renders the trained cartpole policy from train_cartpole.py to an animated GIF."""
 
-import math
-
+import mujoco
 import torch
 import warp as wp
 from PIL import Image
-from PIL import ImageDraw
 from train_cartpole import FRAME_SKIP
 from train_cartpole import ActorCritic
 from train_cartpole import CartpoleEnv
 
-WIDTH, HEIGHT = 480, 240
-PIXELS_PER_METER = 80
-NFRAMES = 300
+import mujoco_warp as mjw
 
-
-def draw_frame(x: float, theta: float) -> Image.Image:
-  """Draws the cart and pole as seen from the front, with the rail centered in the image."""
-  image = Image.new("RGB", (WIDTH, HEIGHT), "white")
-  draw = ImageDraw.Draw(image)
-  rail_y = HEIGHT - 50
-  to_px = lambda px, pz: (WIDTH / 2 + PIXELS_PER_METER * px, rail_y - PIXELS_PER_METER * pz)
-
-  draw.line([to_px(-2.4, 0), to_px(2.4, 0)], fill=(80, 80, 80), width=3)
-  draw.rectangle([to_px(x - 0.2, 0.1), to_px(x + 0.2, -0.1)], fill=(230, 130, 50))
-  draw.line([to_px(x, 0), to_px(x + math.sin(theta), math.cos(theta))], fill=(50, 130, 230), width=7)
-  return image
-
+WIDTH, HEIGHT = 480, 360
+NSTEPS = 300
+RENDER_EVERY = 2
 
 wp.init()
 with wp.ScopedStream(wp.stream_from_torch()):
   env = CartpoleEnv(nworld=1)
   policy = ActorCritic().to(env.obs.device)
   policy.load_state_dict(torch.load("cartpole_policy.pt"))
-  # Zero-copy view of the cart position (qpos[:, 0]) and pole angle (qpos[:, 1]).
-  qpos = wp.to_torch(env.d.qpos)
 
+  mjd = mujoco.MjData(env.mjm)
+  renderer = mujoco.Renderer(env.mjm, height=HEIGHT, width=WIDTH)
   frames = []
+
   obs = env.reset()
   with torch.no_grad():
-    for _ in range(NFRAMES):
+    for t in range(NSTEPS):
       # Use the mean action, without exploration noise, for the demo.
       obs, _, _, _ = env.step(policy.actor(obs))
-      x, theta = qpos[0, :2].tolist()
-      frames.append(draw_frame(x, theta))
+      if t % RENDER_EVERY == 0:
+        # Copy world 0 back into a CPU MjData and render it with MuJoCo's renderer.
+        mjw.get_data_into(mjd, env.mjm, env.d)
+        mujoco.mj_forward(env.mjm, mjd)
+        renderer.update_scene(mjd, camera="front")
+        frames.append(Image.fromarray(renderer.render()))
 
-frame_ms = int(1000 * env.mjm.opt.timestep * FRAME_SKIP)
+frame_ms = int(1000 * env.mjm.opt.timestep * FRAME_SKIP * RENDER_EVERY)
 frames[0].save("cartpole.gif", save_all=True, append_images=frames[1:], duration=frame_ms, loop=0)
 print(f"Saved {len(frames)} frames to cartpole.gif")
