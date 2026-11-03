@@ -25,10 +25,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libegl-mesa0 \
     libgles2 \
     libglvnd0 \
+    libosmesa6 \
     && rm -rf /var/lib/apt/lists/*
 
-ENV MUJOCO_GL=egl
-ENV PYOPENGL_PLATFORM=egl
+# Instinct GPUs have no display outputs, so MuJoCo renders off-screen in software with OSMesa.
+ENV MUJOCO_GL=osmesa
+ENV PYOPENGL_PLATFORM=osmesa
 
 WORKDIR /root/
 
@@ -46,7 +48,7 @@ ARG HIP_ARCH=gfx942
 COPY . /workspace/mujoco_warp
 WORKDIR /workspace/mujoco_warp
 
-RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && git checkout v1.13.0 && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
+RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && git checkout release/v1.13.0 && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
 pip install -e . --break-system-packages
     
 RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps
@@ -62,6 +64,8 @@ WORKDIR /root/
 ENV MAX_JOBS=128
 ENV PYTORCH_ROCM_ARCH="gfx950"
 ENV ROCM_AMDGPU_TARGETS="gfx950"
+ENV MUJOCO_GL=osmesa
+ENV PYOPENGL_PLATFORM=osmesa
 
 # Install Ubuntu dependencies. python3/pip come with the base image.
 ENV DEBIAN_FRONTEND=noninteractive
@@ -72,6 +76,7 @@ RUN apt update \
     git-lfs \
     libtool \
     libegl1-mesa-dev \
+    libosmesa6 \
     g++-14 \
     wget \
     sudo \
@@ -116,7 +121,7 @@ ARG HIP_ARCH=gfx950
 COPY . /workspace/mujoco_warp
 WORKDIR /workspace/mujoco_warp
 
-RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && git checkout v1.13.0 && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
+RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && git checkout release/v1.13.0 && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
 pip install -e . --break-system-packages
     
 RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps
