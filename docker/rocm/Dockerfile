@@ -25,10 +25,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libegl-mesa0 \
     libgles2 \
     libglvnd0 \
+    libosmesa6 \
     && rm -rf /var/lib/apt/lists/*
 
-ENV MUJOCO_GL=egl
-ENV PYOPENGL_PLATFORM=egl
+# Instinct GPUs have no display outputs, so MuJoCo renders off-screen in software with OSMesa.
+ENV MUJOCO_GL=osmesa
+ENV PYOPENGL_PLATFORM=osmesa
 
 WORKDIR /root/
 
@@ -62,6 +64,8 @@ WORKDIR /root/
 ENV MAX_JOBS=128
 ENV PYTORCH_ROCM_ARCH="gfx950"
 ENV ROCM_AMDGPU_TARGETS="gfx950"
+ENV MUJOCO_GL=osmesa
+ENV PYOPENGL_PLATFORM=osmesa
 
 # Install Ubuntu dependencies. python3/pip come with the base image.
 ENV DEBIAN_FRONTEND=noninteractive
@@ -72,6 +76,7 @@ RUN apt update \
     git-lfs \
     libtool \
     libegl1-mesa-dev \
+    libosmesa6 \
     g++-14 \
     wget \
     sudo \
