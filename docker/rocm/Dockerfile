@@ -3,12 +3,7 @@
 # Both targets copy the Warp repo into /workspace/warp, build the native
 # library and install it in editable mode, so the build context must be the
 # repo root. Build locally (from the repo root) with:
-#   docker build --network=host -f docker/rocm/Dockerfile --target warp_gfx942 -t <tag> .
-#
-# Both targets run as the unprivileged `warp` user. GPU access needs the host's
-# GPU device groups, e.g.:
-#   docker run --device=/dev/kfd --device=/dev/dri \
-#     --group-add video --group-add render <tag>
+#   docker build --network=host -f docker/rocm/Dockerfile --target mujocowarp_gfx942 -t <tag> .
 
 ARG ROCM_VERSION=7.2
 ARG UBUNTU_VERSION=24.04
@@ -50,24 +45,18 @@ RUN pip install --break-system-packages \
 
 ARG HIP_ARCH=gfx942
 
-RUN (getent group render || groupadd --system render) \
-    && useradd --create-home --shell /bin/bash --groups video,render warp
-
-COPY --chown=warp:warp . /workspace/mujoco_warp
+COPY . /workspace/mujoco_warp
 WORKDIR /workspace/mujoco_warp
 
 RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && git checkout release/v1.13.0 && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
 pip install -e . --break-system-packages
     
-RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps && \
-    find /workspace/mujoco_warp /workspace/warp ! -user warp -exec chown warp:warp {} +
-
-USER warp
+RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps
 
 # ROCm 10.1.0 / gfx950 image for the Mujoco Warp workload.
 #
 # Build locally with:
-#   docker build --network=host -f docker/rocm/Dockerfile --target warp_gfx950 -t <tag> .
+#   docker build --network=host -f docker/rocm/Dockerfile --target mujocowarp_gfx950 -t <tag> .
 # -----------------------------------------------------------------------------
 FROM ${BASE_IMAGE} AS mujocowarp_gfx950
 
@@ -129,16 +118,11 @@ RUN ln -sf /usr/bin/python3 /usr/local/bin/python
 
 ARG HIP_ARCH=gfx950
 
-RUN (getent group render || groupadd --system render) \
-    && useradd --create-home --shell /bin/bash --groups video,render warp
-
-COPY --chown=warp:warp . /workspace/mujoco_warp
+COPY . /workspace/mujoco_warp
 WORKDIR /workspace/mujoco_warp
 
 RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && git checkout release/v1.13.0 && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
 pip install -e . --break-system-packages
     
-RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps && \
-    find /workspace/mujoco_warp /workspace/warp ! -user warp -exec chown warp:warp {} +
+RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps
 
-USER warp
