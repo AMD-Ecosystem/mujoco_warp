@@ -48,7 +48,7 @@ ARG HIP_ARCH=gfx942
 COPY . /workspace/mujoco_warp
 WORKDIR /workspace/mujoco_warp
 
-RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && git checkout release/v1.13.0 && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
+RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
 pip install -e . --break-system-packages
     
 RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps
@@ -121,7 +121,7 @@ ARG HIP_ARCH=gfx950
 COPY . /workspace/mujoco_warp
 WORKDIR /workspace/mujoco_warp
 
-RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && git checkout release/v1.13.0 && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
+RUN cd /workspace/ && git clone https://github.com/AMD-Ecosystem/warp.git && cd warp/ && ROCM_PATH=/opt/rocm python build_lib.py --hip-arch=${HIP_ARCH} --hipcc-options="-Xarch_device -fno-inline" && \
 pip install -e . --break-system-packages
     
 RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps
