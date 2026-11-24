@@ -1,9 +1,10 @@
-# ROCm 7.2 / gfx942 image for Warp
+# ROCm 7.2 / gfx942 image for MuJoCo Warp
 
-# Both targets copy the Warp repo into /workspace/warp, build the native
-# library and install it in editable mode, so the build context must be the
-# repo root. Build locally (from the repo root) with:
-#   docker build --network=host -f docker/rocm/Dockerfile --target warp_gfx942 -t <tag> .
+# Both targets copy the MuJoCo Warp repository into /workspace/mujoco_warp,
+# clone and build Warp in /workspace/warp, and install both projects in
+# editable mode. The build context must therefore be the MuJoCo Warp
+# repository root. Build locally from that directory with:
+#   docker build --network=host -f docker/rocm/Dockerfile --target mujocowarp_gfx942 -t mujoco-warp:gfx942 .
 
 ARG ROCM_VERSION=7.2
 ARG UBUNTU_VERSION=24.04
@@ -38,7 +39,7 @@ WORKDIR /root/
 RUN ln -sf /usr/bin/python3 /usr/local/bin/python
 
 RUN pip install --break-system-packages \
-    cmake pybind11 build ninja scikit-build-core setuptools-scm numpy pytest pytest-xdist matplotlib "coverage[toml]" && \
+    cmake pybind11 build ninja scikit-build-core setuptools-scm numpy pytest Pillow pytest-xdist matplotlib "coverage[toml]" && \
     pip install --break-system-packages absl-py "etils[epath]" "mujoco==3.9.0" numpy && \
     pip install --break-system-packages \
     torch==${TORCH_VERSION} torchvision==${TORCH_VISION_VERSION} -f https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/
@@ -53,10 +54,10 @@ pip install -e . --break-system-packages
     
 RUN cd /workspace/mujoco_warp/ && pip install -e . --break-system-packages --no-deps
 
-# ROCm 10.1.0 / gfx950 image for the Mujoco Warp workload.
+# ROCm 10.1.0 / gfx950 image for MuJoCo Warp.
 #
 # Build locally with:
-#   docker build --network=host -f docker/rocm/Dockerfile --target warp_gfx950 -t <tag> .
+#   docker build --network=host -f docker/rocm/Dockerfile --target mujocowarp_gfx950 -t mujoco-warp:gfx950 .
 # -----------------------------------------------------------------------------
 FROM ${BASE_IMAGE} AS mujocowarp_gfx950
 
@@ -90,7 +91,7 @@ RUN apt update \
     && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100 \
     && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
 
-# Python build tooling for the warp wheel, plus coverage for the unit-test run.
+# Install Python build, test, plotting, and rendering dependencies.
 # None of these depend on torch, so the base image's ROCm torch stays in place.
 RUN pip install --break-system-packages \
     cmake pybind11 build ninja scikit-build-core setuptools-scm numpy pytest pytest-xdist \
