@@ -38,7 +38,7 @@ WORKDIR /root/
 RUN ln -sf /usr/bin/python3 /usr/local/bin/python
 
 RUN pip install --break-system-packages \
-    cmake pybind11 build ninja scikit-build-core setuptools-scm numpy pytest pytest-xdist matplotlib "coverage[toml]" && \
+    cmake pybind11 build ninja scikit-build-core setuptools-scm numpy pytest Pillow pytest-xdist matplotlib "coverage[toml]" && \
     pip install --break-system-packages absl-py "etils[epath]" "mujoco==3.9.0" numpy && \
     pip install --break-system-packages \
     torch==${TORCH_VERSION} torchvision==${TORCH_VISION_VERSION} -f https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/
